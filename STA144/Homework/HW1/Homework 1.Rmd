@@ -1,0 +1,189 @@
+---
+title: "Homework 1"
+author: "Gianni Spiga"
+date: '2023-04-11'
+output: 
+  html_document:
+    df_print: paged
+    theme: flatly
+---
+
+# Problem 2
+
+## a.)
+
+```{r}
+samp <- c(15, 34, 35, 36, 11, 17, 36, 15)
+
+sampWReplace <- expand.grid(samp, samp, samp)
+# We will 8^3 possibilities, 512
+
+# Now we find all possible, *unique*, sums
+Tsums <- rowSums(sampWReplace)
+
+unique(Tsums)
+```
+
+## b.) 
+
+```{r}
+# sampling distribution of T
+table(Tsums) / length(Tsums)
+```
+
+## c.) To find the correlation, we would first be interested in calculating the covariance, specifically: 
+
+$$
+cov(z_i, z_j) = E(z_i,z_j) - E(z_i)E(z_j)
+$$
+However, in drawing with replacement, we know that each draw is independent, thus we have:
+$$cov(z_i, z_j) = E(z_i)E(z_j) - E(z_i)E(z_j) = 0$$
+Thus, with covariance 0, we can soundly conclude that independent draws have correlation 0. 
+
+## d.) 
+```{r}
+sampWOReplace <- t(combn(samp, m = 3))
+TsumsNoRep <- rowSums(sampWOReplace)
+
+# sampling distribution of T w/o replacement
+table(TsumsNoRep) / length(TsumsNoRep)
+```
+
+## e.) 
+We once again have:
+$$
+cov(z_i, z_j) = E(z_i,z_j) - E(z_i)E(z_j)
+$$
+However, these draws are not independent, thus the joint expectation is not separable. However, since our variables are binary, there is only one instance when the covariance is not zero, and that is when both $z_i$ and $z_j$ are both 1. 
+$$
+\begin{align*}
+cov(z_i, z_j) &= P(z_i = 1, z_j = 1) - P(z_i = 1)P(z_j = 1) \\
+&= P(z_j = 1 |  z_i = 1)P(z_i = 1) - P(z_i = 1)P(z_j = 1) \\
+&=\frac{n_j}{N-1}\frac{n_i}{N} - \frac{n_i}{N} \frac{n_j}{N} \\
+&=\frac{n_i}{N}(\frac{n_j}{N-1} - \frac{n_j}{N})
+\end{align*}
+$$
+
+## f.) 
+```{r}
+# Expected value with replacement
+sum(as.numeric(attr(table(Tsums), "dimnames")$Tsums) * (table(Tsums) / length(Tsums)))
+
+# Or you can just do this
+mean(Tsums)
+var(Tsums)
+
+# For without replacement
+mean(TsumsNoRep)
+var(TsumsNoRep)
+```
+
+# Problem 3
+
+## a.)
+
+```{r}
+pubFac <- data.frame("PrefPubl" = rep(0:10),
+                     "FacultyMemb" = c(28, 4, 3, 4, 4, 2, 1 , 0, 2, 1, 1))
+hist(rep(pubFac$PrefPubl,pubFac$FacultyMemb))
+```
+
+We can see that the data is highly right skewed, where 28 faculty members had 0 refereed publications. 
+
+## b.) 
+```{r}
+long_dat <- rep(pubFac$PrefPubl,pubFac$FacultyMemb)
+mean(long_dat)
+
+sqrt((var(long_dat) / 50) * (1 - 50/807))
+```
+
+## c.)
+
+No, given the skewness of the data, we would need a much larger sample for any justification of normality. 
+```{r}
+phat <- 28 / 50
+
+sePhat <-
+  sqrt(((807 - 50) / (807 - 1)) * ((phat) * (1 - phat) / 50))
+
+# 95% CI
+c(phat - 1.96 * sePhat, phat + 1.96 * sePhat)
+```
+
+# Problem 4
+Problem 11, page 63 2nd ed
+
+## a.) 
+```{r}
+child <- data.frame("Age" = rep(9:20),
+                     "Children" = c(13, 35, 44, 69, 36, 24, 7 , 3, 2, 5, 1, 1))
+
+hist(rep(child$Age,child$Children))
+```
+
+The shape is not normally distributed, there is noticeable right skew in the data. However, since this data is not as heavily skewed as it could be and our sample size is large, we can deduce the sample mean would be normal. 
+
+## b.) 
+```{r}
+# Mean
+mean.age <- mean(rep(child$Age,child$Children))
+mean.age
+
+#SE (ignore FPC, since we do not know population size)
+se.age <- sqrt((var(rep(child$Age,child$Children)) / 240))
+se.age
+
+# 95% CI for mean
+c(mean.age - 1.96 * se.age, mean.age + 1.96 * se.age)
+```
+
+## c.) 
+
+```{r}
+# From page 47 (pdf 60) 2nd ed
+n_desire <- (1.96)^2 * var(rep(child$Age,child$Children)) / (0.5^2)
+round(n_desire)
+```
+
+# Problem 5
+
+Problem 16, page 65 in 2nd ed
+
+## a.)
+
+```{r}
+golfsrs <- read.csv("~/Github/MStats/STA144/Homework/HW1/golfsrs.csv")
+head(golfsrs)
+
+hist(golfsrs$wkday9)
+```
+
+The data is right strongly right skewed with tails.  
+
+## b.) 
+```{r}
+mean(golfsrs$wkday9)
+
+sqrt(var(golfsrs$wkday9) / 120 * (1 - 120 / 14938))
+```
+
+## Problem 6
+
+Problem 22 2nd ed
+
+We need to show that 
+$$
+CV(\hat{p}) = \sqrt{\frac{N-n}{N-1}\frac{1-p}{np}}
+$$
+From the definition in 2.13:
+$$
+\begin{align*}
+CV(\bar{y}) &= \sqrt{\bigg(1 - \frac{n}{N}\bigg)}\frac{S}{\sqrt{n}\bar{y}_U}  \\
+CV(\bar{\hat{p}}) &= \sqrt{\bigg(1 - \frac{n}{N}\bigg)}\frac{\sqrt{\bigg(\frac{N}{N-1}\bigg)p(1-p)}}{\sqrt{n}p} \text{(We substitue for} \ \hat{p}) \\
+&=\sqrt{\bigg(1 - \frac{n}{N}\bigg)\bigg(\frac{N}{N-1}\bigg)\frac{p(1-p)}{np^2}}\\\
+&=\sqrt{\bigg(\frac{N - n}{N}\bigg)\bigg(\frac{N}{N-1}\bigg)\frac{(1-p)}{np}}\\
+&=\sqrt{\bigg(\frac{N - n}{N - 1}\bigg)\frac{(1-p)}{np}}\\
+\end{align*}
+$$
+If the sample size $n=1$, we would have the $CV(\hat{p})$ be $\sqrt{\frac{(1-p)}{p}}$. 
