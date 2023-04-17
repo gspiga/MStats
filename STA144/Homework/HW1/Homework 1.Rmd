@@ -59,8 +59,19 @@ $$
 \begin{align*}
 cov(z_i, z_j) &= P(z_i = 1, z_j = 1) - P(z_i = 1)P(z_j = 1) \\
 &= P(z_j = 1 |  z_i = 1)P(z_i = 1) - P(z_i = 1)P(z_j = 1) \\
-&=\frac{n_j}{N-1}\frac{n_i}{N} - \frac{n_i}{N} \frac{n_j}{N} \\
-&=\frac{n_i}{N}(\frac{n_j}{N-1} - \frac{n_j}{N})
+&=\frac{n-1}{N-1}\frac{n}{N} - \frac{n^2}{N^2} \\
+&=\frac{n}{N}(\frac{n-1}{N-1} - \frac{n}{N}) \\
+&=\frac{3}{8}(\frac{2}{7} - \frac{3}{8}) \\
+&= -0.0335
+\end{align*}
+$$
+$$
+\begin{align*}
+Var(z_i) &= \frac{3}{8}*\frac{5}{8} \\
+&= \frac{15}{64} \\
+Sd(z_i) &= \sqrt{\frac{15}{64}} \\
+corr(z_i, z_j) &= \frac{\frac{3}{8}(\frac{2}{7} - \frac{3}{8})}{\frac{15}{64}} \\
+&= -0.1429
 \end{align*}
 $$
 
