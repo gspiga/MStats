@@ -1,12 +1,20 @@
 ---
 title: "Homework 1"
 author: "Gianni Spiga"
-date: '2023-04-11'
-output: 
+date: "2023-04-11"
+output:
+  pdf_document:
+    toc: yes
   html_document:
     df_print: paged
     theme: flatly
+    code_folding: hide
+    toc: yes
+    toc_float: yes
 ---
+# Problem 1
+ 
+Please see written file uploaded. 
 
 # Problem 2
 
@@ -31,7 +39,8 @@ unique(Tsums)
 table(Tsums) / length(Tsums)
 ```
 
-## c.) To find the correlation, we would first be interested in calculating the covariance, specifically: 
+## c.) 
+To find the correlation, we would first be interested in calculating the covariance, specifically: 
 
 $$
 cov(z_i, z_j) = E(z_i,z_j) - E(z_i)E(z_j)
@@ -56,23 +65,23 @@ cov(z_i, z_j) = E(z_i,z_j) - E(z_i)E(z_j)
 $$
 However, these draws are not independent, thus the joint expectation is not separable. However, since our variables are binary, there is only one instance when the covariance is not zero, and that is when both $z_i$ and $z_j$ are both 1. 
 $$
-\begin{align*}
+\begin{aligned}
 cov(z_i, z_j) &= P(z_i = 1, z_j = 1) - P(z_i = 1)P(z_j = 1) \\
 &= P(z_j = 1 |  z_i = 1)P(z_i = 1) - P(z_i = 1)P(z_j = 1) \\
 &=\frac{n-1}{N-1}\frac{n}{N} - \frac{n^2}{N^2} \\
 &=\frac{n}{N}(\frac{n-1}{N-1} - \frac{n}{N}) \\
 &=\frac{3}{8}(\frac{2}{7} - \frac{3}{8}) \\
 &= -0.0335
-\end{align*}
+\end{aligned}
 $$
 $$
-\begin{align*}
+\begin{aligned}
 Var(z_i) &= \frac{3}{8}*\frac{5}{8} \\
 &= \frac{15}{64} \\
 Sd(z_i) &= \sqrt{\frac{15}{64}} \\
 corr(z_i, z_j) &= \frac{\frac{3}{8}(\frac{2}{7} - \frac{3}{8})}{\frac{15}{64}} \\
 &= -0.1429
-\end{align*}
+\end{aligned}
 $$
 
 ## f.) 
@@ -96,7 +105,7 @@ var(TsumsNoRep)
 ```{r}
 pubFac <- data.frame("PrefPubl" = rep(0:10),
                      "FacultyMemb" = c(28, 4, 3, 4, 4, 2, 1 , 0, 2, 1, 1))
-hist(rep(pubFac$PrefPubl,pubFac$FacultyMemb))
+hist(rep(pubFac$PrefPubl,pubFac$FacultyMemb), breaks = 10)
 ```
 
 We can see that the data is highly right skewed, where 28 faculty members had 0 refereed publications. 
@@ -112,11 +121,15 @@ sqrt((var(long_dat) / 50) * (1 - 50/807))
 ## c.)
 
 No, given the skewness of the data, we would need a much larger sample for any justification of normality. 
+
+## d.) 
+2.19 gives the formula $SE(\hat{p}) = \sqrt{(1-\frac{n}{N})\frac{\hat{p}(1-\hat{p})}{n - 1}}$.
+
 ```{r}
 phat <- 28 / 50
 
 sePhat <-
-  sqrt(((807 - 50) / (807 - 1)) * ((phat) * (1 - phat) / 50))
+  sqrt(((807 - 50) / (807 - 1)) * ((phat) * (1 - phat) / (50-1)))
 
 # 95% CI
 c(phat - 1.96 * sePhat, phat + 1.96 * sePhat)
@@ -130,10 +143,10 @@ Problem 11, page 63 2nd ed
 child <- data.frame("Age" = rep(9:20),
                      "Children" = c(13, 35, 44, 69, 36, 24, 7 , 3, 2, 5, 1, 1))
 
-hist(rep(child$Age,child$Children))
+hist(rep(child$Age,child$Children), breaks = 10)
 ```
 
-The shape is not normally distributed, there is noticeable right skew in the data. However, since this data is not as heavily skewed as it could be and our sample size is large, we can deduce the sample mean would be normal. 
+The shape is not normally distributed, there is noticeable right skew in the data. However, since this data is not as heavily skewed as it could be and our sample size is large, we can deduce the sample mean would be approximately normal. 
 
 ## b.) 
 ```{r}
@@ -154,7 +167,7 @@ c(mean.age - 1.96 * se.age, mean.age + 1.96 * se.age)
 ```{r}
 # From page 47 (pdf 60) 2nd ed
 n_desire <- (1.96)^2 * var(rep(child$Age,child$Children)) / (0.5^2)
-round(n_desire)
+ceiling(n_desire)
 ```
 
 # Problem 5
@@ -179,22 +192,60 @@ mean(golfsrs$wkday9)
 sqrt(var(golfsrs$wkday9) / 120 * (1 - 120 / 14938))
 ```
 
-## Problem 6
+# Problem 6
 
 Problem 22 2nd ed
+
+## a.) 
 
 We need to show that 
 $$
 CV(\hat{p}) = \sqrt{\frac{N-n}{N-1}\frac{1-p}{np}}
 $$
 From the definition in 2.13:
+
 $$
-\begin{align*}
+\begin{aligned}
 CV(\bar{y}) &= \sqrt{\bigg(1 - \frac{n}{N}\bigg)}\frac{S}{\sqrt{n}\bar{y}_U}  \\
-CV(\bar{\hat{p}}) &= \sqrt{\bigg(1 - \frac{n}{N}\bigg)}\frac{\sqrt{\bigg(\frac{N}{N-1}\bigg)p(1-p)}}{\sqrt{n}p} \text{(We substitue for} \ \hat{p}) \\
+CV(\hat{p}) &= \sqrt{\bigg(1 - \frac{n}{N}\bigg)}\frac{\sqrt{\bigg(\frac{N}{N-1}\bigg)p(1-p)}}{\sqrt{n}p} \text{(We substitue for} \ \hat{p}) \\
 &=\sqrt{\bigg(1 - \frac{n}{N}\bigg)\bigg(\frac{N}{N-1}\bigg)\frac{p(1-p)}{np^2}}\\\
 &=\sqrt{\bigg(\frac{N - n}{N}\bigg)\bigg(\frac{N}{N-1}\bigg)\frac{(1-p)}{np}}\\
 &=\sqrt{\bigg(\frac{N - n}{N - 1}\bigg)\frac{(1-p)}{np}}\\
-\end{align*}
+\end{aligned}
 $$
-If the sample size $n=1$, we would have the $CV(\hat{p})$ be $\sqrt{\frac{(1-p)}{p}}$. 
+
+If the sample size $n=1$, we would have the $CV(\hat{p}) = \sqrt{\frac{(1-p)}{p}}$.
+
+$$
+\begin{aligned}
+n = 1 &= \frac{z^2_{\alpha/2}S^2}{(r\bar{y}_U)^2+ \frac{z^2_{\alpha/2}S^2}{N}} \\
+&= \frac{z^2_{\alpha/2}\frac{N}{N-1}p(1-p)}{(rp)^2+ \frac{z^2_{\alpha/2}p(1-p)}{N-1}} \\
+&= \frac{z^2_{\alpha/2}\frac{N}{N-1}\frac{p(1-p)}{p^2}}{\frac{(rp)^2}{p^2}+ \frac{z^2_{\alpha/2}p(1-p)}{(N-1)p^2}} \\
+&= \frac{z^2_{\alpha/2}\frac{N}{N-1}CV^2(\hat{p})}{\frac{(rp)^2}{p^2}+ \frac{z^2_{\alpha/2}CV^2(\hat{p})}{(N-1)}} \\
+\frac{(rp)^2}{p^2}+ \frac{z^2_{\alpha/2}CV^2(\hat{p})}{(N-1)}
+&= z^2_{\alpha/2}\frac{N}{N-1}CV^2(\hat{p})\\
+\frac{(rp)^2}{p^2}
+&= z^2_{\alpha/2}\frac{N}{N-1}CV^2(\hat{p}) - \frac{z^2_{\alpha/2}CV^2(\hat{p})}{(N-1)}\\
+\frac{(rp)^2}{p^2}
+&= \frac{z^2_{\alpha/2}CV^2(\hat{p})}{N-1}(N-1)\\
+r^2
+&= z^2_{\alpha/2}CV^2(\hat{p})\\
+CV(\hat{p}) &= \frac{r}{z_{\alpha/2}}
+\end{aligned}
+$$
+
+## b.) 
+
+Below is a data frame wit the neccessary sample sizes for the fixed and relative margin of error for each corresponding value of $p$. When using a fixed margin of error, the values of n are small for small values of $p$. However, when using a relative margin of error, we need an extremely large sample size. By making the necessary MOE relative to the value of $p$, the true margin of error is much smaller.
+
+```{r}
+p.vec <- c(0.001, 0.005, 0.01, 0.05, 0.10, 0.30, 0.50, 0.70, 0.90, 0.95, 0.99, 0.995, 0.999)
+# Fixed MoE
+FMOE <- sapply(p.vec, function(p) {1.96^2*p*(1-p) / 0.03^2})
+
+# Relative MOE 
+RMOE <- sapply(p.vec, function(p) {1.96^2*p*(1-p) / (0.03*p)^2})
+
+MOE.df <- data.frame("p" = p.vec, "Fixed"= FMOE, "Relative" = RMOE)
+MOE.df
+```
