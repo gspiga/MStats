@@ -69,6 +69,8 @@ mean(combDF$`t1+t2`)
 
 sum((combDF$`t1+t2` - 40)^2 * combDF$P.t1.and.t2.)
 ```
+Our mean is the same as SRS but our variance with stratified sampling is lower. 
+
 # P2: Problem 3, Chapter 3
 
 ## a.)
@@ -282,7 +284,7 @@ c(total_fac1[1], "Sqrt of" = sqrt(total_fac1[2]))
 ```
 ## b.
 
-Since we are using stratified random sampling, we are minimizing the estimated variance for each total (as well as the standard error). So our stratifed samples have less standard error than our simple random samples. 
+Since we are using stratified random sampling, we are minimizing the estimated variance for each total (as well as the standard error). So our stratified samples have less standard error than our simple random samples. 
 
 ## c. 
 
@@ -415,8 +417,10 @@ $$
 
 ## b. 
 
+Since the population size is large, we can ignore FPC. 
+
 $$
-{V}(\hat{p}_{str}) = \sum_{h=1}^H  \bigg(\frac{N_h}{N}\bigg)^2 \frac{\hat{p}_h (1 - \hat{p}_h)}{n_h}
+{V}(\hat{p}_{str}) = \sum_{h=1}^H  \bigg(\frac{N_h}{N}\bigg)^2 \frac{p_h (1 - p_h)}{n_h}
 $$
 Under proportional allocation:
 ```{r}
