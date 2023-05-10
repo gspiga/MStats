@@ -1,0 +1,503 @@
+---
+title: "Homework 2"
+author: "Gianni Spiga"
+date: '2023-05-02'
+output:
+  html_document:
+    df_print: paged
+    theme: flatly
+    code_folding: hide
+    toc: yes
+    toc_float: yes
+---
+
+# P1: Problem 2, Chapter 2
+
+## a. 
+Assuming without replacement:
+
+```{r}
+library(knitr)
+
+kable(data.frame(
+  "Stratum" = rep(1, 6),
+  "Samples" = c("[1,2]", "[1,3]", "[1,8]", "[2,3]", "[2,8]", "[3,8]"),
+  "Prob" = rep(1 / 6, 6)
+))
+
+kable(data.frame(
+  "Stratum" = rep(2, 6),
+  "Samples" = c("[4,5]", "[4,6]", "[4,7]", "[5,6]", "[5,7]", "[6,7]"),
+  "Prob" = rep(1 / 6, 6)
+))
+```
+## b.
+
+```{r}
+kable(data.frame(
+  "Stratum" = rep(1, 6),
+  "Samples" = c("[1,2]", "[1,3]", "[1,8]", "[2,3]", "[2,8]", "[3,8]"),
+  "Prob" = rep(1 / 6, 6), 
+  "hat(t_str1)" = c(2*(1+2), 2*(1+4), 2*(1+8), 2*(2+4), 2*(2+8), 2*(4+8)),
+  "P(hat(t_str1)" = rep(1/6, 6)
+))
+
+kable(data.frame(
+  "Stratum" = rep(2, 6),
+  "Samples" = c("[4,5]", "[4,6]", "[4,7]", "[5,6]", "[5,7]", "[6,7]"),
+  "Prob" = rep(1 / 6, 6),
+  "hat(t_str2)" = c(2*(4+7), 2*(4+7), 2*(4+7), 2*(7+7), 2*(7+7), 2*(7+7)),
+  "P(hat(t_str2)" = c(1/2, NA, NA, 1/2, NA, NA)
+))
+
+combDF <- cbind(data.frame(
+  "hat(t_str1)" = c(2*(1+2), 2*(1+4), 2*(1+8), 2*(2+4), 2*(2+8), 2*(4+8)),
+  "P(hat(t_str1)" = rep(1/6, 6)
+), data.frame(
+  "hat(t_str2)" = c(rep(22,6), rep(28,6)),
+  "P(hat(t_str2)" = rep(1/2, 12), "P(t1 and t2)" = rep(1/12, 12)
+ ))
+combDF["t1+t2"] = combDF$hat.t_str1. + combDF$hat.t_str2.
+combDF
+```
+## c.
+
+```{r}
+# Expected value
+mean(combDF$`t1+t2`)
+
+
+sum((combDF$`t1+t2` - 40)^2 * combDF$P.t1.and.t2.)
+```
+# P2: Problem 3, Chapter 3
+
+## a.)
+
+```{r}
+pop <- c(66 , 59 , 70 , 83 , 82 , 71)
+
+# Population mean (ybarU) is 
+mean(pop)
+
+#Population Variance S2
+var(pop) 
+```
+## b.
+
+There would be ${6\choose4} = 15$ possible samples. 
+
+## c. 
+Formula 2.9:
+
+$$
+Var(\bar{y}) = \frac{S^2}{n}\bigg(1 - \frac{n}{N}\bigg)
+$$
+
+```{r}
+# All possible samples of size 4 without replacement
+samp4WO <- data.frame(t(combn(pop, m = 4)))
+samp4WO
+# table of sample means
+table(rowMeans(samp4WO))
+
+
+# Using formula 2.9
+(var(pop) / 4) * (1 - 4/6)
+```
+## d. 
+
+In total, we have ${3\choose2} {3\choose2}= 9$ possible samples. 
+
+## e. 
+
+One could not have a sample that contains 3 observations from one stratum, since we are only sampling 2 from each. 
+
+Below, we show the possible samples with stratification. 
+
+```{r}
+str1 <- c(66, 59, 70)
+str2 <- c(83, 82, 71)
+
+str1Samps <- t(combn(str1, 2))
+str1Samps
+
+str1Samps[1, ]
+
+stratSamps <-
+  data.frame(
+    "STR1_Unit1" = c(rep(str1Samps[1, 1], 3), rep(str1Samps[2, 1], 3), rep(str1Samps[3, 1], 3)),
+    "STR1_Unit2" = c(rep(str1Samps[1, 2], 3), rep(str1Samps[2, 2], 3), rep(str1Samps[3, 2], 3))
+  )
+
+str2Samps <-
+  data.frame(rbind(t(combn(str2, 2)), t(combn(str2, 2)), t(combn(str2, 2))))
+names(str2Samps) <- c("STR2_Unit1", "STR2_Unit2")
+
+stratSamps <- cbind(stratSamps, str2Samps)
+kable(stratSamps)
+```
+## f. 
+
+```{r}
+ybarSTR <- rowMeans(stratSamps)
+ybarSTR
+```
+$$
+\hat{V}(\bar{y}_{str}) = \sum_{h=1}^H \big(1 - \frac{n_h}{N_h}\big) \big(\frac{N_h}{N}\big)^2 \frac{s^2_h}{n_h}
+$$
+```{r}
+#var(str1)
+#var(str2)
+
+(1 - 2 / 3) *(3/6)^2 * var(str1) / 2 +  (1 - 2/3 )*(3/6)^2 * var(str2) / 2
+```
+The variances for each strata, 31 and 44.33, lead us to much smaller variance than the population variance. 
+
+# P3: Problem 6 Chapter 3
+
+## a. 
+
+Since we believe the standard deviations are proportional, we will use Neyman allocation. Since $S_1$ (the variability of houses) is twice as much as the variability for apartments and condominiums, we need to sample double from houses what we would need to from the latter. 
+
+
+```{r}
+# Our population size, scaled by respective variablities
+35000 * 2 + 45000 + 10000
+
+# n_h for each strata
+#houses
+70000/125000 * 900
+
+# Apartments
+45000/125000 * 900
+
+# Condos
+10000/125000 * 900
+```
+## b.
+
+If we did proportional allocation, we would have the following sample sizes for each stratum as follows:
+
+```{r}
+# n_h for each strata
+#houses
+35000/90000 * 900
+
+# Apartments
+45000/90000 * 900
+
+# Condos
+10000/90000 * 900
+
+
+```
+Formula (3.7) on page 81: 
+$$
+\hat{V}(\hat{p}_{str}) = \sum_{h=1}^H \bigg(1 - \frac{n_h}{N_h}\bigg) \bigg(\frac{N_h}{N}\bigg)^2 \frac{\hat{p}_h (1 - \hat{p}_h)}{n_h - 1} \\
+{V}(\hat{p}_{str}) = \sum_{h=1}^H  \bigg(\frac{N_h}{N}\bigg)^2 \frac{\hat{p}_h (1 - \hat{p}_h)}{n_h}
+$$
+```{r}
+#variance of phat str
+var.p.strat <- (35/90)^2 * (0.45)*(0.55) / 350 + 
+  (45/90)^2 * (0.25)*(0.75) / 450 + 
+  (10/90)^2 * (0.03)*(0.97) / 100
+var.p.strat
+
+p <- 35/90 * .45 + 45/90 * .25 + 1/9 * 0.03
+p
+
+
+# Variance of SRS with no strata
+var.p.srs <- p * (1-p) / 900
+
+# the ratio of the two variances would be 
+var.p.strat / var.p.srs
+```
+Since we have lowered the variance of $\hat{p}$ using a stratified random sample, we would only need roughly 91% of the original sample size for our result to give us the same variance as a simple random sample. 
+
+# P4: Problem 7, Chapter 3
+
+```{r}
+faculty <- as.data.frame(matrix(c(
+0, 1, 10, 9, 8,
+1, 2, 2, 0, 2,
+2, 0, 0, 1, 0,
+3, 1, 1, 0, 1,
+4, 0, 2, 2, 0,
+5, 2, 1, 0, 0,
+6, 0, 1, 1, 0,
+7, 1, 0, 0, 0,
+8, 0, 2, 0, 0), nrow = 9, ncol = 5, byrow = TRUE))
+
+
+names(faculty) <- c("Number of 
+Refereed Publications", "Biological", "Physical", "Social", "Humanities")
+faculty
+
+# Find ybar str
+# ybar_fac <- c(
+#   sum(faculty[, 1] * faculty[, 2]) / 7,
+#   sum(faculty[, 1] * faculty[, 3]) / 19,
+#   sum(faculty[, 1] * faculty[, 4]) / 13,
+#   sum(faculty[, 1] * faculty[, 5]) / 11
+# )
+
+ybar_fac <- c(
+  mean(rep(faculty[,1], faculty[,2])),
+  mean(rep(faculty[, 1] , faculty[, 3])),
+  mean(rep(faculty[, 1] , faculty[, 4])),
+  mean(rep(faculty[, 1] , faculty[, 5]))
+)
+#ybar_fac
+
+# Variances of each strata s2h
+s2h_fac <- c(
+  var(rep(faculty[,1], faculty[,2])),
+  var(rep(faculty[, 1] , faculty[, 3])),
+  var(rep(faculty[, 1] , faculty[, 4])),
+  var(rep(faculty[, 1] , faculty[, 5]))
+)
+#s2h_fac
+
+# Find T hat
+# column totals * Nh / nh
+that_fac <- ybar_fac* c(102, 310, 217, 178)
+
+var_that_fac <-
+  c(
+    102 ^ 2 * (1 - 7 / 102) * s2h_fac[1] / 7,
+    310 ^ 2 * (1 - 19 / 310) * s2h_fac[2] / 19,
+    217 ^ 2 * (1 - 13 / 217) * s2h_fac[3] / 13,
+    178 ^ 2 * (1 - 11 / 178) * s2h_fac[4] / 11
+  )
+var_that_fac
+
+total_fac <- data.frame("Estimated Total" = that_fac, "Estimated Variance" = var_that_fac)
+rownames(total_fac) <- c("Biological", "Physical", "Social", "Humanities")
+total_fac
+
+# Calculated estimated total and standard error 
+total_fac1 <- colSums(total_fac)
+c(total_fac1[1], "Sqrt of" = sqrt(total_fac1[2]))
+```
+## b.
+
+Since we are using stratified random sampling, we are minimizing the estimated variance for each total (as well as the standard error). So our stratifed samples have less standard error than our simple random samples. 
+
+## c. 
+
+$$
+\hat{p}_{str} = \sum_h \frac{N_h}{N}\hat{p}_h
+$$
+
+```{r}
+phat_fac0 <- c(1/7, 10/19, 9/13, 8/11)
+#phat_fac0
+
+phat_str <- sum(phat_fac0 * c(102/807, 310/807, 217/807, 178/807))
+phat_str
+
+phat_estvar <- sum(c(
+    (102/807) ^ 2 * (1 - 7 / 102) * phat_fac0[1] * (1 - phat_fac0[1]) / (7-1),
+    (310/807) ^ 2 * (1 - 19 / 310) * phat_fac0[2] * (1 - phat_fac0[2]) / (19-1),
+    (217/807) ^ 2 * (1 - 13 / 217) * phat_fac0[3] * (1 - phat_fac0[3]) / (13-1),
+    (178/807) ^ 2 * (1 - 11 / 178) * phat_fac0[4] * (1 - phat_fac0[4]) / (11-1)
+  ))
+sqrt(phat_estvar)
+```
+## d.
+
+Yes since we know that stratification can lower variability, we know that we have a better estimate for our proportion. 
+
+# P5: Problem 10, Chapter 3 (2nd Edition)
+
+## a. 
+
+$$
+\hat{t}_{str} = \sum_h N_h\bar{y}_h \\
+\hat{V}(\hat{t}_{str}) = \sum_{h=1}^H \bigg(1 - \frac{n_h}{N_h}\bigg) N_h^2 \frac{s_h^2}{n_h}
+$$
+
+```{r}
+Nh_clams <- round(25.6 * c(222.81, 49.61, 50.25, 197.81))
+#Nh_clams
+
+ybar_clams <- c(0.44, 1.17, 3.92, 1.8)
+
+that_clams <- round(Nh_clams * ybar_clams)
+
+# Estimated totals hat(t)_str
+that_str_clams <- sum(that_clams)
+that_str_clams
+
+# STD error
+sqrt(sum(
+  c((1 - 4 / Nh_clams[1]) * Nh_clams[1] ^ 2 * 0.068 / 4,
+    (1 - 6 / Nh_clams[2]) * Nh_clams[2] ^ 2 * 0.042 / 6,
+    (1 - 3 / Nh_clams[3]) * Nh_clams[3] ^ 2 * 2.146 / 3,
+    (1 - 5 / Nh_clams[4]) * Nh_clams[4] ^ 2 * 0.794 / 5
+  )
+))
+```
+
+## b. 
+
+```{r}
+# repeat but only for two stratum
+Nh_clams2 <- round(25.6 * c(322.67, 197.81))
+#Nh_clams
+
+ybar_clams2 <- c(0.63, 0.4)
+
+that_clams2 <- round(Nh_clams2 * ybar_clams2)
+
+# Estimated totals hat(t)_str
+that_str_clams2 <- sum(that_clams2)
+that_str_clams2
+
+# STD error
+sqrt(sum(
+  c((1 - 8 / Nh_clams2[1]) * Nh_clams2[1] ^ 2 * 0.083 / 8,
+    (1 - 5 / Nh_clams2[2]) * Nh_clams2[2] ^ 2 * 0.046 / 5
+  )
+))
+```
+
+# P6: Problem 21 Chapter 3 Pg 110
+
+$$
+SSB < \sum_{h=1}^H \bigg(1 - \frac{N_h}{N}\bigg) S_h^2 \ \ \ (3.11) \\
+\sum_{h=1}^H N_h (\bar{y}_{hU} - \bar{y}_{U})^2 < \sum_{h=1}^H \bigg(1 - \frac{N_h}{N}\bigg) S_h^2
+$$
+If we have a small population $N = 100$, and each $N_h = 50$ for 2 strata. We will be scaling the difference of sample strata means and the population mean by a large value, and scaling the population variance for each strata by a small number. For example:
+
+$$
+\text{For} \ h=1 :\\
+N_1 (\bar{y}_{1U} - \bar{y}_{U})^2 <  \bigg(1 - \frac{N_1}{N}\bigg) S_1^2 \\
+50 (\bar{y}_{1U} - \bar{y}_{U})^2 <  \bigg(1 - \frac{50}{100}\bigg) S_1^2 \\
+50 (\bar{y}_{1U} - \bar{y}_{U})^2 <  0.5 S_1^2 \\
+50 (\bar{y}_{1U} - \bar{y}_{U})^2 <  0.5 \frac{(\bar{y}_{1U} - \bar{y}_{U})^2}{50 -1} \\
+50  <  \frac{0.5}{49} \\
+50  <  0.0172\Rightarrow\Leftarrow
+$$
+A large $N_h$ will a force a contradiction, as shown above. 
+
+# P7: Problem 22, Chapter 3, P110
+
+## a.
+
+Since cost is the same, we can use Neyman-Allocation, specifically:
+$$
+n_h = \bigg(\frac{N_hS_h}{\sum_l^HN_lS_l}
+\bigg)n \\ 
+n_h = \bigg(\frac{N_hS_h}{\sum_l^HN_lS_l}
+\bigg)2000 \\ 
+n_h = \bigg(\frac{\frac{N_hS_h}{N}}{\sum_l^H \frac{N_lS_l}{N}}
+\bigg)2000 \\ 
+$$
+We have $S_h = (\sqrt{0.1*0.9}, \sqrt{0.03*0.97} = (0.3, 0.1706)$
+
+$$
+\sum_l^H \frac{N_l}{N}S_l = (0.4)(0.3) + (0.6)(0.1706) = 0.22236
+$$
+We can now write: 
+
+$$
+\begin{aligned}
+n_1 &= \bigg(\frac{(0.4)(0.3)}{0.22236}
+\bigg)2000 \\
+&\approx 1079 \\
+n_2 &= \bigg(\frac{(0.6)(0.1706)}{0.22236}
+\bigg)2000 \\
+&\approx 921
+\end{aligned}
+$$
+
+## b. 
+
+$$
+{V}(\hat{p}_{str}) = \sum_{h=1}^H  \bigg(\frac{N_h}{N}\bigg)^2 \frac{\hat{p}_h (1 - \hat{p}_h)}{n_h}
+$$
+Under proportional allocation:
+```{r}
+n1_prop = 0.4 * 2000
+n2_prop = 0.6 * 2000
+
+# Variance 
+0.4^2 * 0.1*0.9 / n1_prop +  0.6^2 * 0.03*0.97 / n2_prop
+```
+
+Under optimal allocation:
+```{r}
+n1_opt = 1079
+n2_opt = 921
+
+0.4^2 * 0.1*0.9 / n1_opt +  0.6^2 * 0.03*0.97 / n2_opt
+```
+
+Under Simple Random Sample:
+```{r}
+phat_srs = 0.4*0.1 + 0.6*0.03
+
+# Variance
+phat_srs * (1 - phat_srs) / 2000
+```
+
+## c. 
+$$
+\hat{p}_{str} = \sum_h^H \frac{N_h}{N}\hat{p}_h \ \ (3.6)
+$$
+```{r, message = F}
+# Using provided code
+n <- 2000 #SET SAMPLE SIZE
+p <- 0.05 #SET TRUE POPULATION PROPORTION
+p1_vec <- seq(0.01, 0.11, 0.01) #SET VECTOR OF VALUES OF p_1 TO ITERATE OVER
+N1_prop_vec <- seq(0.2, 0.8, 0.1) #SET VECTOR OF VALUES OF N_1/N TO ITERATE OVER
+
+V_opt <- matrix(0, nrow=length(p1_vec), ncol=length(N1_prop_vec))  #matrix to store results of the variance under optimal allocation
+V_prop <- matrix(0, nrow=length(p1_vec), ncol=length(N1_prop_vec)) #matrix to store results of the variance under proportional allocation
+
+for(i in 1:length(p1_vec)){
+  for(j in 1:length(N1_prop_vec)){
+    p1 <- p1_vec[i]  #pick a specific p_1
+    N1_prop <- N1_prop_vec[j]  #pick a specific N_1/N
+    N2_prop <- 1 - N1_prop #USING THE SPECIFIC N_1/N ABOVE, SET N_2/N    
+    p2 <- p - p1* N1_prop #COMPUTE p_2, USING THE SPECIFC p_1 AND N_1/N ABOVE
+    
+    S1 <- p1 * (1 - p1)#COMPUTE S_1
+    S2 <- p2 * (1 - p2)#COMPUTE S_2
+    n1_opt <- n * (N1_prop*S1) / (N1_prop*S1 + N2_prop*S2) #COMPUTE n_1 UNDER OPTIMAL ALLOCATION
+    n2_opt <- n * (N2_prop*S2) / (N1_prop*S1 + N2_prop*S2)#COMPUTE n_2 UNDER OPTIMAL ALLOCATION
+    V_opt[i,j] <- N1_prop^2 * S1 / n1_opt + N2_prop^2 * S2 / n2_opt #COMPUTE VARIANCE OF p_hat UNDER OPTMAL ALLOCATION
+    
+    n1_prop <-  p1 * n #COMPUTE n_1 UNDER PROPORTIONAL ALLOCATION
+    n2_prop <-  p2 * n #COMPUTE n_2 UNDER PROPORTIONAL ALLOCATION
+    V_prop[i,j] <- N1_prop^2 * S1 / n1_prop + N2_prop^2 * S2 / n2_prop #COMPUTE VARIANCE OF p_hat UNDER PROPORTIONAL ALLOCATION
+  }
+}
+
+V_opt <- data.frame(V_opt)
+names(V_opt) <- as.character(seq(0.2, 0.8, 0.1))
+rownames(V_opt) <- as.character(seq(0.01, 0.11, 0.01))
+
+V_prop <- data.frame(V_prop)
+names(V_prop) <- as.character(seq(0.2, 0.8, 0.1))
+rownames(V_prop) <- as.character(seq(0.01, 0.11, 0.01))
+
+library(tidyr)
+V_opt_long <- pivot_longer(data = V_opt, cols = names(V_opt))
+names(V_opt_long) <- c("name", "value_opt")
+V_opt_long["p1"] <- rep(seq(0.01, 0.11, 0.01), each = 7)
+
+V_prop_long <- pivot_longer(data = V_prop, cols = names(V_prop))
+V_prop_long["p1"] <- rep(seq(0.01, 0.11, 0.01), each = 7)
+
+V_merged <- merge(V_opt_long, V_prop_long, by = c("name", "p1"))
+#V_merged["p1"] <- rep(seq(0.01, 0.11, 0.01), each = 7)
+names(V_merged) <- c("N1overN", "p1", "var_opt", "var_prop")
+library(ggplot2)
+library(plotly)
+ggplotly(ggplot(data = V_merged, aes(x = var_opt, y = var_prop, color = N1overN, size = p1)) + geom_point() + labs(x = "Variance of Optimal Allocation", y = "Variance of Proportional Allocation", color = "N1/N"))
+```
+
+We can see from the plot as the value of $p_1$ increases, our optimal allocation variance increases for all values of $\frac{N_1}{N}$ However, our variance of proportional allocation is minimized when our $\frac{N_1}{N}$ is around 0.4, regardless of our choice of $p_1$. 
