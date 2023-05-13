@@ -1,0 +1,202 @@
+---
+title: "Homework 2"
+author: "Gianni Spiga"
+date: '2022-10-11'
+output: html_document
+---
+
+## Question 6
+a.) The relationship betweein high school graduates and crime rate, according to the trendline in the scatterplot, has a moderate strength, negative relationship. As the percentage of graduates increases, the crime rate decreases. 
+
+b.)
+```{r}
+n <- 84
+Xi <- 6602
+Yi <- 597341
+Xi2 <- 522098
+Yi2 <- 4796548849
+XiYi <- 46400230
+
+Xbar <- Xi/n
+Ybar <- Yi /n
+
+Beta1 <- (XiYi - (n*Xbar*Ybar)) / (Xi2 - n*(Xbar)^2)
+Beta1
+
+Beta0 <- Ybar - Beta1*Xbar
+Beta0
+```
+
+Observing our $\beta_0$, we can understand that by our model, if we were to have a county with a high school graduate percentage of 0, we would expect to see a 20,518 crimes per 100,000 people. Our $\beta_1$ tells us that for each percentage increase in high school graduates, we see crimes per 100,000 people drop by on average 171 people. 
+
+
+$$
+SSE = \sum Y_i^2 - 2 \hat{\beta_1} * \sum Y_i - 2 \hat{\beta_1}\sum X_iY_i + n\hat{\beta_0} + 2\ \hat{\beta_0} \hat{\beta_1} \sum X_i + \hat{\beta_1}^2\sum X_i^2
+$$
+c.)
+```{r}
+SSE <-
+  Yi2 - 2 * Beta0 * Yi - 2 * Beta1 * XiYi + Beta0 ^ 2 * 84 + 2 * Beta0 *
+  Beta1 * Xi + Beta1 ^ 2 * Xi2
+SSE
+
+MSE <- SSE / (84 - 2)
+MSE
+```
+
+The degrees of freedom for the SSE is $n - 2$ which in this case is 82. 
+
+d.)
+```{r}
+# Standard Error of Beta0
+seBeta0 <- sqrt(MSE * ((1/n) + (Xbar^2/(Xi2 - n*(Xbar)^2))))
+seBeta0
+
+# Standard Error of Beta1
+seBeta1 <- sqrt(MSE / ((Xi2 - n*(Xbar)^2)))
+seBeta1
+
+Sxx <-((Xi2 - n*(Xbar)^2))
+```
+
+e.)
+We are testing
+$$
+H_0: \beta_1 = 0\\
+H_a: \beta_1 \neq 0
+$$
+With test statistic:
+$$
+T^* = \frac{\hat{\beta_1}} {s(\hat{\beta_1})}
+$$
+where..
+$$
+T^* \sim t_{(n-2)}
+$$
+
+```{r}
+# We test for Beta 1 
+
+Tstar <-  Beta1 / seBeta1
+Tstar
+
+critval <- qt(1 - (0.01/2), n - 2)
+critval
+
+pval <-pt(Tstar, n -2)
+pval
+```
+Since our critical value is less than our $T^*$, we reject $H_0$, concluding there is a significant relationship between the percentage of high school graduates in a county and that county's respective crime rate per 100,000 people. 
+
+f.) An unbiased estimator for the population parameter $\beta_0$ is our sample intercept $\hat{\beta_0}$.
+```{r}
+#We create a confidence interval for Beta0
+c(Beta0 - qt(1 - 0.01 / 2, n - 2, ) * seBeta0,
+  Beta0 + qt(1 - 0.01 / 2, n - 2, ) * seBeta0)
+
+```
+We are 99% confident that the true value of $\beta_0$ is contained within the interval $[11874.05, 29161.15]$. 
+
+g.)
+```{r}
+Yh <- Beta0 + Beta1 * 85
+seYh <- sqrt(MSE * (1/928 + (85 - Xbar)^2 / Sxx ))
+
+c(Yh - qt(1 - 0.05/2, n - 2) * seYh, Yh + qt(1 - 0.05/2, n - 2) * seYh)
+
+```
+We are 95% confident that the true value of the mean crime rate for counties with a high school graduation rate of 85% is contained within the interval $[5467.109, 6570.308]$. 
+
+h.)
+```{r}
+Yh <- Beta0 + Beta1 * 85
+seYhpred <- sqrt(MSE * (1 + 1/928 + (85 - Xbar)^2 / Sxx))
+
+c(Yh - qt(1 - 0.05/2, n - 2) * seYhpred, Yh + qt(1 - 0.05/2, n - 2) * seYhpred)
+```
+We prediction with 95% confident that the true value of the crime rate for County A is contained within the interval $[1298.95, 10738.47]$. We can see that this interval is larger than our interval for our mean response in part g, since we have to account for the uncorrelated errors associated with our observations. 
+
+i.) Parts (e) - (h) rely the assumption that $Y_H$ is normally distributed, this way we can utilize the t statistic in both our confidence and prediction intervals.We are also assuming our linear estimators $\beta_0$ and $\beta_1$ follow normal distributions for the same utilization.  
+
+## Question 7
+
+a.)
+```{r}
+SSR <- Beta1^2 * Sxx
+SSTO <- SSE + SSR
+
+SSE
+SSR
+SSTO
+
+```
+
+b.)
+```{r}
+# Mean Squares
+MSR <- SSR / 1 
+
+MSE
+MSR
+```
+
+c.)
+```{r}
+ANOVAtable <-
+  data.frame(
+    c(SSR, SSE, SSTO),
+    c(1, n - 2, n - 1),
+    c(MSR, MSE, NA),
+    c(MSR / MSE, NA, NA),
+    row.names = c("Regression", "Error", "Total")
+  )
+names(ANOVAtable) <- c("SS", "d.f.", "MS", "F*")
+ANOVAtable
+```
+
+d.)
+$$
+H_0: \beta_1 = 0\\
+H_a: \beta_1 \neq 0
+$$
+With test statistic:
+$$
+F^* = \frac{MSE} {MSE}
+$$
+where the null distribution is...
+$$
+F^* \sim F_{(1 - \alpha, n-2)}
+$$
+and decision rule of rejectiong $H_0$ when...
+
+$$
+F^* > F_{(1 - \alpha, 1, n-2)}
+$$
+```{r}
+Fstat <- MSR/MSE
+critval <- qf(1 - 0.01, 1, n-2)
+
+critval
+Fstat > critval
+```
+
+Since our $F^*$ is greater than our critical value, we reject $H_0$, concluding there is a linear association between crime rate and percentage of high school graduates. 
+
+e.) We notice that both our F test and T test provide us the same conclusion, that there is a linear association between crime rate and percentage of high school graduates. There is also a direct relationship that our F statistic is the same as the square of our T statistic. 
+
+f.)
+```{r}
+R2 <- SSR/SSTO
+R2
+```
+
+We can see that about 17.03% of the variation in crime rate for a county can be explained by the variation in the percentage of high school graduates. 
+
+```{r}
+r <- (XiYi - (n*Xbar*Ybar)) / sqrt(Sxx * (Yi2 - n*(Ybar)^2))
+r
+
+r^2
+```
+
+We notice that our $R^2$ and the square of our $r$ value are the same value. 

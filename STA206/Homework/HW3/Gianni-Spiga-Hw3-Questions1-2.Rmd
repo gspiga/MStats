@@ -1,0 +1,188 @@
+---
+title: "Homework 3"
+author: "Gianni Spiga"
+date: '2022-10-15'
+output: html_document
+---
+
+## Question 1
+
+a.)
+```{r, message = FALSE}
+library(ggplot2)
+library(plotly)
+```
+
+```{r}
+muscle <- read.table("muscle.txt")
+colnames(muscle) <- c("mass", "age")
+head(muscle, 10)
+
+ggplotly(ggplot(muscle, aes(x = mass)) + geom_histogram(bins =15, fill = "#FF6347"))
+ggplotly(ggplot(muscle, aes(x = age)) + geom_histogram(bins = 15, fill = "#FFA07A"))
+```
+We can see from the plots that mass has a slight skew to the right while the age histrogram has a strong right skew.
+
+```{r}
+ggplotly(ggplot(muscle, aes(x = age, y= mass)) + geom_point(color = "#FFC300"))
+```
+
+We can see that from the scatter plot that the data seems to have a negative linear relationship. 
+
+b.)
+```{r}
+library(MASS)
+bxcx <- boxcox(mass ~ age, data = muscle)
+lambda <- bxcx$x[which.max(bxcx$y)]
+lambda
+```
+
+Since our Box Cox 95% confidence interval contains 1, we can conclude that a transformation of our variable is unneccessary. 
+
+c.)  
+```{r}
+#Build the model
+modelMM <- lm(mass ~ age, data = muscle)
+sumModelMM <- summary(modelMM)
+
+# Coefficients and their standard errors
+sumModelMM$coefficients
+
+# MSE
+MSE <- sum(sumModelMM$residuals^2) / (nrow(muscle) - 2)
+MSE
+
+# Degrees of Freedom for MSE
+sumModelMM$df[2]
+```
+
+d.) The regression line for the data is the following:
+$$
+\hat{Y_i} = 156.347 - 1.190X_i
+$$
+
+```{r}
+ggplotly(
+  ggplot(muscle, aes(x = age, y = mass)) + geom_point(color = "#FFC300") + geom_abline(
+    intercept = 156.346564,
+    slope = -1.189996,
+    col = "#003cff"
+  )
+)
+```
+
+We can see that our fitted regression line does fit the data very well. 
+
+e.) 
+```{r}
+# Fitted values for 6th and 16th value 
+modelMM$fitted.values[c(6,16)]
+
+#Residuals for 6th and 16th cases
+modelMM$residuals[c(6,16)]
+```
+
+f.) The Normal Error Model is written as the following:
+$$
+Y_i = \beta_0 + \beta_1X_i + \epsilon_i 
+$$
+with $i = 1, \dots, n$ where the error terms are *independently* and *identically* distributed (i.i.d.) $N(0, \sigma^2)$ random variables. 
+
+```{r}
+#Errors vs Fitted Values 
+ggplot() + aes(x = modelMM$fitted.values, y = modelMM$residuals) + geom_point() + labs(x = "Fitted Values", y = "Residuals") + geom_abline(intercept = 0, slope = 0)
+
+# ggplot(modelMM, aes(qqnorm(.stdresid)[[1]], .stdresid)) + geom_point() + geom_abline() + labs(x = "Theoretical Quantiles", y = "Standardized Residuals", title = "Normal Q-Q")
+
+## Normal Q-Q plot
+ggplot(muscle, aes(sample = mass)) + stat_qq() + stat_qq_line() + labs(x = "Theoretical Quantiles", y = "Sample Quantiles", title = "Normal Q-Q")
+
+# {qqnorm(muscle$mass)
+# qqline(muscle$mass)}
+```
+
+Both of our residual plots suggest that our normality assumption is met. The Error v.s. Fitted Values plot shows no patterns, with random scatter through out the plot. The Normal Q-Q plot follows fairly close to the standard line, with no strong deviation which would indicate skewing or heavy tails. 
+
+g.) We test:
+$$
+H_0: \beta_0 = 0 \\
+H_a: \beta_0 \neq 0
+$$
+
+```{r}
+xbar <- mean(muscle$age)
+
+as.numeric(
+  c(
+    modelMM$coefficients[1] - qt(1 - 0.01 / 2, nrow(muscle) - 2) * sumModelMM$coefficients[1, 2],
+    modelMM$coefficients[1] + qt(1 - 0.01 / 2, nrow(muscle) - 2) * sumModelMM$coefficients[1, 2]
+  )
+)
+
+```
+
+We are 99% confident that the true value for $\beta_0$ is contained within the interval (141.6658, 171.0273).
+
+h.) We test the hypothesis:
+$$
+H_0: \beta_1 \geq 0 \\
+H_a: \beta_1 < 0
+$$
+With test statistic:
+$$
+T^* = \frac{\hat{\beta_1} - \beta_1^{(0)}}{s(\beta_1)} \\
+T^* \sim t_{(n-2)}
+$$
+We reject $H_0$ if and only if $T^* < t(\alpha, n-2)$.
+
+```{r}
+Tstar <- sumModelMM$coefficients[2,1] / sumModelMM$coefficients[2,2]
+Tstar
+
+Tstar < qt(0.01, nrow(muscle) - 2)
+```
+
+Since our T statistic is less than our critical value, we reject our null hypothesis and conclude that there is a negative linear association between the amount of muscle mass and age for a woman. 
+
+i.)
+```{r}
+predict(
+  modelMM,
+  newdata = data.frame(
+   age = 60
+  ),
+  interval = "prediction",
+  level = 0.95
+)
+```
+We predict with 95% confidence that the muscle mass for a woman aged 60 will be contained within the interval (68.451, 101.443). 
+
+j.) We test the hypothesis: 
+$$
+H_0: \beta_1 = 0 \\
+H_a: \beta_1 \neq 0
+$$
+With test statistic:
+$$
+F^* = \frac{MSR}{MSE} \\
+F^* \sim F_{(1, n-2)}
+$$
+We reject $H_0$ if $F^* > F(1 - \alpha, 1, n-2)$.
+
+```{r}
+anova(modelMM)
+```
+At $\alpha = 0.01$ and a p-value of $2.2e-16$, we reject $H_0$, concluding that there is a linear association between the amount of muscle mass and age. 
+
+k.) 
+```{r}
+#Proportion of total variation is measured by R^2
+sumModelMM$r.squared
+
+cor(muscle$age, muscle$mass)
+```
+75.01% of the variation in muscle mass is explained by the variation in age. We can also see that muscle mass and age have a correlation value of -0.8661, indicting a strong, negative relationship.
+
+## Question 2
+
+For the plot in the top left, we can see that the distribution is right skewed, given that the points are condensing in lower values of the sample quantiles. For the top right plot, we can see this data has lighter tails and more condensed data in the center, making a more narrow distribution. For the bottom left, this seems to be a bimodal plot, given the two clusters at the bottom left and top right of the qqplot. For the final plot, the bottom right, this is data that looks to be approximately normal, with no obvious signs of skewness. 

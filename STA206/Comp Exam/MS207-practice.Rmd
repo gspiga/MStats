@@ -1,0 +1,164 @@
+---
+title: "MS Comprehensive Exam 2022"
+date: "STA 207  (100 points)"
+output: html_document
+---
+
+<span style="color:red">**Read the instructions on Canvas carefully!**</span>
+
+___
+
+**Name**: Gianni Spiga    
+
+**Student ID**: 918363295
+
+___
+
+```{r,echo=T,results=F,message=F}
+library(lme4)
+library(ggplot2)
+library(plotly)
+```
+
+In this exam, we investigate the `ChickWeight` dataset in `R`. You can load the data using the following commands. Carefully read the help file of `ChickWeight` before working on the following questions. 
+```{r, echo=T}
+data(ChickWeight)
+View(ChickWeight)
+```
+
+***
+
+**(a) Briefly summarize all variables in the data set. You need to provide the definition of the variable and quantitative summary. **
+
+<b> Solution: </b>  (Type your answer here)
+
+
+```{r}
+# (a). (Type your code in the space below, if any)
+summary(ChickWeight)
+
+attributes(ChickWeight)
+?ChickWeight # Attach definitions
+table(ChickWeight$Chick)
+```
+From the summary output above, we can see that the we have two quantitative variables, weight and Time. Our other two variables, chick and Diet are qualitative. We can see that for Chick, we have 12 counts for each chick, except for a few, specifically 18, 16, 15, 13, 8, and 35. From our Diet variable, we can see that there are more chicks on diet 1 than any other. Our time variable, given that the mean and median are close to each other, seems somewhat symmetric, however visualziation will be necessary. In our weight variable, we can see the mean is higher than the median, so we might expect some skew, which can be explored again in the visualization. 
+
+
+
+**(b) Visualize the weights of each chicks over time in one plot, where (i) each chick is represented by one solid curve, and (ii) the `diet` is color-coded as black (1), red (2), green (3), and blue (4). In addition to the required visualization, you may add any supporting curves, symbols, or any additional plots that you find informative.**
+	
+<b> Solution: </b>  (Type your answer here)
+
+
+```{r}
+# (b). (Type your code in the space below, if any)
+ggplotly(ggplot(data = ChickWeight, aes(
+  x = Time,
+  y = weight,
+  group = Chick,
+  color = Diet
+)) + geom_line() + scale_color_manual(values = c("black", "red", "green", "blue")))
+
+```
+
+
+***
+
+
+
+**(c) Write down an appropriate one-way ANOVA model to answer the question whether there is any changes in mean weights at Day 20 across the four diet group. To receive full credits, you need to (i) write down the model, explain your notation, constraint(s) and/or assumptions; (ii) state the null and alternative hypotheses; (iii) state the test result. You can find basic LaTeX commands at the end of this file.  **
+
+
+<b> Solution: </b>  (Type your answer here)
+
+
+
+$$
+Y_{i} = \mu + \alpha_i + \epsilon_i 
+$$
+
+
+ii.) 
+$$
+H_0: \alpha_1 = \alpha_2 = \cdots = \alpha_4=0 \ \\
+{\rm v.s.} \ \  H_1: {\rm not \ all\ } \alpha_i\ {\rm are\ the\ zero}.
+$$
+
+```{r}
+# (c). (Type your code in the space below, if any)
+chick.day20 <- ChickWeight[ChickWeight$Time == 20,]
+
+mod1 <- aov(weight ~ Diet, data = chick.day20)
+summary(mod1)
+```
+
+From our ANOVA p-value of 0.003, we can reject the null hypothesis and conclude that there is one significant change in weight from the diet given to a chick. 
+
+**(d) For the model fitted in (c), carry out necessary diagnostics to check if the model assumptions are valid. What are your findings?**
+
+<b> Solution: </b>  (Type your answer here)
+
+
+```{r}
+# (d). (Type your code in the space below, if any)
+# Checking normality and equal var
+plot(mod1, which = c(2,5))
+
+```
+Model looks good by normality and equal variance assumption
+
+**(e) Write down an appropriate two-way ANOVA model with fixed effect to answer the question whether there is any differences in growth rates across the four diet groups. Here the growth rate can be roughly seen as the effects of `Time` on `weight`. To receive full credits, you need to (i) write down the model, explain your notation, constraint(s) and/or assumptions; (ii) state the null and alternative hypotheses; (iii) state the test result. Hint: You may want to recycle the answer in (c) to save time. **
+
+
+<b> Solution: </b>  (Type your answer here)
+
+$$
+Y_{i,j,k}=\mu + \alpha_i+\beta_j +(\alpha \beta)_{i,j} +\epsilon_{i,j,k}, \\ i=1,\ldots, 12, j =1,\ldots, 4, k=1,2,\ldots, n_{i,j},
+$$
+```{r}
+# (e). (Type your code in the space below, if any)
+length(unique(ChickWeight$Time))
+
+mod2 <- aov(weight ~ as.factor(Time) * Diet, data = ChickWeight)
+anova(mod2)
+
+# We can check for reduced model as well
+
+mod2.red <- aov(weight ~ as.factor(Time) + Diet, data = ChickWeight)
+
+anova(mod2, mod2.red)
+```
+
+***
+
+**(f) We want to take the chick-specific effect into account. The new mixed effect model is based on the model in (e), where `Time` is treated as a continuous covariate instead of a categorical factor, and a random intercept and a random slope (of `Time`) are added into the model. Report the fitted coefficients of the fixed effects, and summarize your findings from this model. Hint: You do not need to write down the new model, but you may find it helpful.  **
+
+<b> Solution: </b>  (Type your answer here)
+
+
+```{r}
+# (f). (Type your code in the space below, if any)
+mod3 <- lmer(weight ~ Time * Diet + (1|Chick), data = ChickWeight)
+summary(mod3)
+
+mod3.other <- lmer(weight ~ Time * Diet + (1 + Time|Chick), data = ChickWeight)
+summary(mod3.other)
+```
+
+
+***
+
+**(g) Assume that the chicks in each diet are randomly selected from the same population, i.e., the enrollment of chicks is independent from any other factors. State the Stable Unit Treatment Value Assumption, write down the potential outcomes (weight at Day 20), and verify whether the randomization assumption holds. (This question will be replaced by another, since causal inference will not be covered this quarter.)** 
+	
+
+<b> Solution: </b>  (Type your answer here) 
+
+
+
+
+***
+
+**LaTeX commands**
+
+$$Y_{i,j,k}, \mu, \alpha, \beta, \epsilon, i, j, H_0, H_a, \neq, =, \ldots$$
+

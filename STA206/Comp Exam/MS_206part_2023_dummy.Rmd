@@ -1,0 +1,49 @@
+---
+title: "MS Comp. Exam 2023: 206 Part (Dummy Exam)"
+author: Gianni Spiga
+output:
+  html_document: default
+  word_document: default
+---
+
+
+
+**Instruction**:  <br>
+In this question, you will be aked to perform some tasks in R.  Please submit the codes and plots along with your answers. You should submit an .html file. 
+
+
+**Question**: <br>
+In *dummy.Rdata* you will find a data set called *data* with two variables, *V1, V2*. Please first load the data into the R workspace. **Please then**: <br>
+ i. Obtain mean and variance for each variable. <br>
+ ii. Draw a histgram for each variable and briefly comment on its distribution. <br> 
+ 
+```{r, message = F, warning = F}
+# Loading in the data
+load("dummy.Rdata")
+
+# i.) obtain mean and variance
+# Mean
+colMeans(data)
+# Var-cov matrix
+var(data)
+
+# ii.)
+library(ggplot2)
+library(plotly)
+ggplotly(
+  ggplot(data = data, aes(x = V1)) + geom_histogram(
+    bins = 20,
+    fill = "firebrick",
+    alpha = 0.7
+  ) + geom_histogram(
+    aes(x = V2),
+    bins = 20,
+    fill = "dodgerblue",
+    alpha = 0.7
+  ) + labs(x = "Variable", y = "Count", title = "Comparison of V1 and V2 Histograms"
+  )
+)
+```
+
+From the distribution of histograms as well as our summary statistics, we can see that distribution of V1 has a larger variance than V2. V1 appears to have some slight skew with heavy tails but is roughly near symmetric. V2 however, does not have any resemblance of a symmetric distribution, and could be argued to have some left skew. One interesting factor about both distributions is that their highest count of values intersect at the same bin (hovering over the plot will show that this is a corresponding value of 78). 
+

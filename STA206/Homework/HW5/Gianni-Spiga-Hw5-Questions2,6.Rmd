@@ -1,0 +1,288 @@
+---
+title: "Homework 5"
+author: "Gianni Spiga"
+date: '2022-10-30'
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r, message=FALSE}
+library(ggplot2)
+library(GGally)
+library(plotly)
+```
+## Question 2 
+
+### d.) 
+```{r}
+Xh <- c(1, 0, 0, 0)
+XtXinv <-
+  matrix(rbind(
+    c(0.087,-0.014,-0.035,-0.004),
+    c(-0.014, 0.115,-0.012,-0.052),
+    c(-0.035,-0.012, 0.057,-0.014),
+    c(-0.004,-0.052,-0.014, 0.050)
+  ), nrow = 4, ncol = 4)
+XtXinv
+
+
+SE.predh <- sqrt(1.040 * (1 + t(Xh) %*% XtXinv %*% Xh))
+SE.predh
+
+qt(1 - (0.05 / 2), 30 - 4)
+
+c(0.9918 - (qt(1 - (0.05 / 2), 30 - 4) * SE.predh), 0.9918 + (qt(1 - (0.05 / 2), 30 - 4) * SE.predh))
+```
+
+## Question 6
+
+### a.)
+```{r}
+property <- read.table("property.txt")
+colnames(property) <-
+  c("Ren.Rate", "Age", "Exp", "Vac.Rate", "Sq.Foot")
+property
+```
+
+For the variable types, Age, Vacancy Rate, and Total Square Footage are type doubles, Operating Expenses and Rental Rate are integers. Now we observe the distribution of each variable and some summary statistics. 
+
+```{r}
+ggplot(data = property, aes(x = Ren.Rate)) + geom_histogram(bins = 10, fill = "#55A3C0")
+summary(property$Ren.Rate)
+```
+
+We can see approximate symmetry with light tails in the age variable. The mean and the median are very close to each other. 
+
+```{r}
+ggplot(data = property, aes(x = Age)) + geom_histogram(bins = 10, fill = "#556EC0")
+summary(property$Age)
+```
+
+For the Age variable, we can see a bimodal distribution. The majority of the data sits between 0 and 5 thousand and 10 and 20 thousand. Because of this spread, the median is lower, towards where a larger bulk of the data is. The mean however is leaning towards the center of the data, being skewed by the concentration of larger values. 
+
+```{r}
+ggplot(data = property, aes(x = Exp)) + geom_histogram(bins = 13, fill = "#7255C0")
+summary(property$Exp)
+```
+
+With our Opertating Expenses variable, we observe a left skewed distribution. Most of the data is within our IQR, from about 8.13 to 11.62. 
+
+```{r}
+ggplot(data = property, aes(x = Vac.Rate)) + geom_histogram(bins = 9, fill = "#7255C0")
+summary(property$Vac.Rate)
+```
+
+In the Vacancy Rate data, we can see a very strong right skew. Most of our data does not exceed 0.1. Because of the skewing, we can see that the median is smaller than the mean. 
+
+```{r}
+ggplot(data = property, aes(x = Sq.Foot)) + geom_histogram(bins = 7, fill = "#7255C0")
+summary(property$Sq.Foot)
+```
+
+With our Square Footage variable, we can again see a right skew. Unlike Vacancy Rate, this skew is not as strong as it has some pull towards the center, as well as a heavier tail. 
+
+### b.) 
+```{r, warning = FALSE}
+ggplotly(ggpairs(property, title = "Correlogram of Property Data"))
+```
+
+From the plot, we can see that the variables with the highest correlation is Rental Rate and Square Footage. The variables with the smallest correlation are Rental Rate and Vacancy Rate. This makes sense, the scatter plot for Rental Rate and Square Footage has the most linear resemblence while Rental Rate and Vacancy Rate show almost no relationship. We can see that Vacancy Rate is negatively correlated with Age and Operating Expenses. 
+
+### c.)
+
+```{r}
+model1 <- lm(Ren.Rate ~ Age + Exp + Vac.Rate + Sq.Foot, data = property)
+summary(model1)
+```
+
+The least squares estimates are the following:
+```{r}
+model1$coefficients
+```
+The fitted regression function: 
+$$
+Y_i = 12.220 - 0.142 X_{i1} + 0.282X_{i2} + 0.619X_{i3} + 7.924e^{-06}X_{i4}
+$$
+
+The $R^2$ for the model is $0.5847$ and the $R^2_{adj}$ is $0.5629$. 
+
+We can print the ANOVA table to gather more information.
+
+```{r}
+#MSE
+anova(model1)
+```
+The ANOVA table shows us that our $MSE = 1.293$. 
+
+### d.) 
+```{r}
+#Residuals vs Fitted Values
+ggplot() + aes(x = model1$fitted.values, model1$residuals) + geom_point() + labs(x = "Fitted Values", y = "Residuals", title = "Residuals vs. Fitted Values") + geom_abline(intercept = 0, slope = 0)
+
+## Normal Q-Q plot
+ggplot(model1, aes(sample = model1$residuals)) + stat_qq() + stat_qq_line() + labs(x = "Theoretical Quantiles", y = "Sample Quantiles", title = "Normal Q-Q")
+
+# Residual Boxplot
+ggplot() + aes(x = model1$residuals) + geom_boxplot() + labs(x = "Residuals") 
+```
+
+We can see from the Residual vs Fitted Value plot that we have random scatter with no sign of a pattern, suggesting that a linear model is the best model for this data. Our Normal QQ Plot shows us that our distribution is approximately normal with signs of light tails. Our box plot shows us that our data is approximatly symmetric, with only 4 outliers in the data set. 
+
+### e.) 
+
+```{r}
+#Residuals vs Age
+ggplot() + aes(x = property$Age, y = model1$residuals) + geom_point() + labs(x = "Age", y = "Residuals", title = "Residuals vs. Age") + geom_abline(intercept = 0, slope = 0)
+
+# Residuals vs Operating Expenses
+ggplot() + aes(x = property$Exp, y = model1$residuals) + geom_point() + labs(x = "Operating Expenses", y = "Residuals", title = "Residuals vs. Operating Expenses") + geom_abline(intercept = 0, slope = 0)
+
+# Residuals vs Operating Expenses
+ggplot() + aes(x = property$Vac.Rate, y = model1$residuals) + geom_point() + labs(x = "Vacancy Rate", y = "Residuals", title = "Residuals vs. Vacancy Rate") + geom_abline(intercept = 0, slope = 0)
+
+# Residuals vs Square Footage
+ggplot() + aes(x = property$Sq.Foot, y = model1$residuals) + geom_point() + labs(x = "Square Footage", y = "Residuals", title = "Residuals vs. Square Footage") + geom_abline(intercept = 0, slope = 0)
+
+
+### Interactions 
+
+#Residuals vs Age*Expenses
+ggplot() + aes(x = property$Age * property$Exp, y = model1$residuals) + geom_point() + labs(x = "Age*Expenses", y = "Residuals", title = "Residuals vs. Age*Expenses") + geom_abline(intercept = 0, slope = 0)
+
+#Residuals vs Age*Vac.Rate
+ggplot() + aes(x = property$Age * property$Vac.Rate, y = model1$residuals) + geom_point() + labs(x = "Age*Vac.Rate", y = "Residuals", title = "Residuals vs. Age*Vac.Rate") + geom_abline(intercept = 0, slope = 0)
+
+#Residuals vs Age*Sq.Foot
+ggplot() + aes(x = property$Age * property$Sq.Foot, y = model1$residuals) + geom_point() + labs(x = "Age*Sq.Foot", y = "Residuals", title = "Residuals vs. Age*Sq.Foot") + geom_abline(intercept = 0, slope = 0)
+
+#Residuals vs Expenses*VacRate
+ggplot() + aes(x = property$Exp * property$Vac.Rate, y = model1$residuals) + geom_point() + labs(x = "Exp*Vac.Rate", y = "Residuals", title = "Residuals vs. Exp*Vac.Rate") + geom_abline(intercept = 0, slope = 0)
+
+#Residuals vs Expenses*Sq.Foot
+ggplot() + aes(x = property$Exp * property$Sq.Foot, y = model1$residuals) + geom_point() + labs(x = "Exp*Sq.Foot", y = "Residuals", title = "Residuals vs. Exp*Sq.Foot") + geom_abline(intercept = 0, slope = 0)
+
+#Residuals vs Vac.Rate*Sq.Foot
+ggplot() + aes(x = property$Vac.Rate * property$Sq.Foot, y = model1$residuals) + geom_point() + labs(x = "Vac.Rate*Sq.Foot", y = "Residuals", title = "Residuals vs. Vac.Rate*Sq.Foot") + geom_abline(intercept = 0, slope = 0)
+```
+
+We have six interaction terms. When we observe plots with interactions with Vacancy Rate, we notice that a lot of the observations are very close to zero. Because of this, the data does not have random scatter, but instead, high concentration to the left with outliers on the right. We see this same scenario with interactions with Total Square Footage variable, however not as strong. 
+
+In our non-interaction plots, we can see that variables Age and Vacancy Rate have clusters of data, which violates our desire for random scatter. 
+
+### f.) 
+To test our Beta coefficients, we have: 
+$$
+H_0: \beta_k = 0 \\
+H_a: \beta_k \neq 0
+$$
+With test statistic and null distribution:
+$$
+T^* = \frac{\hat{\beta_k}}{s(\hat{\beta_k})} \\
+T^* \sim t_{n-p}
+$$
+
+We reject $H_0$ if $T^* > t(1 - \alpha/2, n-p)$.
+
+Thankfully, the summary of our model does this test for us with the p-values. For the intercept, age, operational expenses, and square footage with respective p-values (< 2e-16, 3.89e-09, 2.75e-05, 1.98e-07), we reject $H_0$, concluding that the coefficients are significantly diffrerent than 0. However, for our Vacancy Rate, with p-value 0.57, we fail to reject $H_0$, leading us to conclude that Vacancy Rate does not help us predict Rental Rates. ALl other variables we conclude are useful in modeling Rental Rates. 
+
+### g.) 
+```{r}
+anova(model1)
+```
+
+$$
+SSE = 98.231 \\
+df(SSE) = 76 \\
+SSR = 14.819 + 72.802 + 8.381 + 42.325 = 138.327\\
+df(SSR) = 4\\
+SSTO = 98.231 + 138.327 = 236.558\\
+df(SSTO) = 80
+$$
+
+We test the hypothesis for the regrssion relation:
+
+$$
+H_0: \beta_1 = \dots = \beta_{p-1} = 0 \\
+H_a: \text{Not all}\ \beta_ks \ \text{equal to zero}
+$$
+
+$$
+F^* = \frac{MSR}{MSE} \\
+F^* \sim_{H_0} F_{(p-1, n-p)}
+$$
+
+We reject $H_0$ if $F^* > F(1 - \alpha, p-1, n-p)$.
+
+```{r}
+Fstar <- (138.327 / 4) / (98.231 / 76)
+Fstar
+
+pf(Fstar, 4, 76, lower.tail = FALSE)
+```
+
+Since our p-value is much smaller than our $\alpha = 0.01$, we reject our null hypothesis. We can conclude that not all the $\beta_ks$ equal zero. 
+
+### h.) 
+```{r}
+model2 <- lm(Ren.Rate ~ Age + Exp + Sq.Foot, data = property)
+model2$coefficients
+```
+The fitted regression function for model2: 
+$$
+Y_i = 12.37 - 0.144 X_{i1} + 0.267X_{i2} + 8.178e^{-06}X_{i4}
+$$
+
+We would decide to make an new model without for $X_3$ since we concluded in part f that $X_3$ was not significant to the modeling of rental rates. 
+
+```{r}
+summary(model2)
+anova(model2)
+```
+The value of $R^2 = 0.583$ and the $R^2_{adj} = 0.5667$. The $MSE = 1.281$. 
+
+### i.) 
+```{r}
+sumModel1 <- summary(model1)
+sumModel2 <- summary(model2)
+
+# Print the std errors 
+sumModel1$coefficients[,2]
+sumModel2$coefficients[,2]
+```
+
+We can see that the std. error of the coefficients are smaller for each coefficient. If we had constructed intervals for model 1 with the larger standard errors, we would have found the intervals to be wider than the intervals made for model 2.
+
+```{r}
+tval <- qt(1 - (0.01/2), nrow(property) - 4)
+
+#confidence intervals 
+t(
+  rbind(
+    sumModel2$coefficients[, 1] - tval * sumModel2$coefficients[, 2],
+    sumModel2$coefficients[, 1] + tval * sumModel2$coefficients[, 2]
+  )
+)
+```
+
+### j.) 
+```{r}
+# Prediction for model 1
+predict(model1, data.frame(Age = 4, Exp = 10, Vac.Rate = 0.1, Sq.Foot = 80,000), interval = "prediction", level = 0.99)
+
+# Prediction for model 2
+predict(model2, data.frame(Age = 4, Exp = 10, Sq.Foot = 80,000), interval = "prediction", level = 0.99)
+
+# Range for interval 1
+17.60305 - 11.42732
+
+# Range for interval 2
+17.53121 - 11.40128
+```
+
+We can see that the interval for model2 is slightly more narrow than than the interval for model1. 
+
+### k.) 
+Overall, we would prefer to use model 2. We have a lower MSE, statistically signifanct predictors for every variable in the model, and higher $R^2_{adj}$ value. A model with less variables is also easier to interpret.  

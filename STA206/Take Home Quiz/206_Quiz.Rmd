@@ -1,0 +1,134 @@
+---
+title: "STA206 Fall 2022: Take Home Quiz"
+author: "Gianni Spiga"
+output:
+  html_document: 
+    theme: flatly
+    df_print: paged
+  word_document: default
+---
+
+**Instructions**:  <br>
+
+* In this quiz, you will be asked to perform some  tasks in R <br>
+* You should submit a .html (preferred format) or .docx file. 
+*  You should only include the output that is directly related to answering the questions. A flood of unprocessed raw output from R may result in penalties.  
+
+In *Quiz_data.Rdata* you will find a data set called *data* with three variables: *Y* and *X1, X2*. For the following, **you should use the original data and no standardization should be applied**. 
+
+
+* **(a). Load the data into the R workspace. How many observations are there in this data?  **<br>
+
+```{r}
+#(Type your code in the space below)
+load("Quiz_data.Rdata")
+
+head(data, 15)
+
+# We count the number of observations
+nrow(data)
+```
+There are 100 observations in this dataset. 
+  
+* **(b). What is the type of each variable? For each variable, draw one plot to depict its distribution. Arrange these plots into one multiple paneled graph. **<br> 
+```{r, message = FALSE, warning=FALSE}
+library(ggplot2)
+library(GGally)
+library(plotly)
+library(ggpubr)
+```
+
+```{r, warning=F}
+#(Type your code in the space below)
+Yhist <- ggplot(data, aes(x = Y)) + geom_histogram(bins =15, fill = "#7255C0")
+X1hist <- ggplot(data, aes(x = X1)) + geom_histogram(bins =15, fill = "#7255C0")
+X2hist <- ggplot(data, aes(x = X2)) + geom_histogram(bins =15, fill = "#7255C0")
+
+# Making panels
+ggarrange(Yhist, X1hist, X2hist, nrow = 2, ncol = 2)
+```
+\\ 
+
+As seen in the dataframe above, all variables are type doubles. For our $Y$ variable, we can see there is a right skew, $X_1$ and $X_2$ are approximately normal, however $X_1$ has a heavier left tail. $X_2$ looks the most normal. 
+
+* **(c). Draw the scatter plot matrix and obtain the correlation matrix for these three variables. Briefly describe how *Y* appears to be related to *X1* and *X2*. **<br>
+
+```{r, warning=F}
+# (Type your code in the space below)
+#We could output correlation matrix
+# cor(data)
+
+#This plot will show scatterplot and correlation
+ggplotly(ggpairs(data, title = "Correlogram of Data"))
+```
+
+From the correlations, we can see that Y has a moderate strength correlation with both $X_1$and $X_2$ with values $0.487$ and $0.399$ respectively. Both these relationships are positive and linear, as denoted by the scatterplots. We can see in the scatterplot the stronger linear relationship between $Y$ and $X_1$. It should be noted that  $X_1$ and $X_2$ have a moderately weak, positive correlation, giving no signs of multicollinearity.  
+
+* **(d). Fit a first-order model with *Y* as the response variable and *X1, X2* as the predictors (referred to as Model 1). How many regression coefficients are there in Model 1? **<br>
+```{r}
+# (Type your code in the space below)
+# We fit a first oder model 
+model1 <- lm(Y ~ X1 + X2, data = data)
+model1$coefficients
+```
+
+We have two regression coefficients, our partial slopes for the $X_1$ and $X_2$, which are $\hat{\beta_1}$ and $\hat{\beta_2}$ respectively. We also have an intercept $\hat{\beta_0}$. 
+
+* **(e). Conduct model diagnostics for Model 1 and comment on how well model assumptions hold. **<br>
+```{r}
+summary(model1)
+```
+
+From our model diagnostics, we can see that any reasonable $\alpha$, our regression parameters are significant individually in a t-test and in an overall test for the model in an F test, leading us to believe the model is significant. Our $R^2$ and $R^2_a$ are not too impressive though, only at $0.3203$ and $0.288$ respectively. We can see that the variable $X_2$ has a larger p-value, suggesting that is not as significant as $X_1$ and the intercept. 
+
+
+* **(f). Fit a 2nd-order polynomial regression model with *Y* as the response variable and *X1, X2* as the predictors (referred to Model 2).   Calculate the variance inflation factors for this model. Does there appears to be strong multicollinearity? Explain briefly.**<br>  
+
+
+```{r}
+# We create our new squared variables
+data["X1sq"] <- data$X1^2
+data["X2sq"] <- data$X2^2
+data["X1X2int"] <- data$X1 * data$X2
+
+#Build model 2
+model2 <- lm(Y ~ X1 + X2 + X1sq+ X2sq + X1X2int, data = data)
+
+# We can find the variance inflation factors by taking inverse of correlation matrix and finding the diagonals
+diag(solve(cor(data)))
+```
+
+There appears to be a strong multicollinearity between $X_2$ and $X_2^2$, since their VIF's are much larger than 10 (around 28). We can also see that there is multicollinearity between $X_1$ and $X_1X_2$ interaction term, with a VIF greater than 10 of around 13. 
+
+* **(g). Conduct model diagnostics for Model 2. Do model assumptions appear to hold better under Model 2 compared to under Model 1?  Explain briefly.  **<br>
+```{r}
+summary(model2)
+```
+In the F test for the model, we do reject $H_0$ and conclude that at least one of the regression coefficients is non-zero, just as we did for model 1, However, if we look at some of the individual t-tests for the regression coefficients, we can see that not all the coefficients are significant, such as $X_2$, $X_2^2$, and $X_1X_2$.Our cofficient of multiple determination is much higher, however, we must also keep in mind that a part of this is due to the large increase in number of parameters. The $R^2_a$, a better indicator of fit when adding more terms, still gives us promise, with a value of 0.7729 for model 2. In short, the model assumptions for this model 2 hold, but not much better than model 1. 
+
+
+* **(h). Under Model 2, obtain the 99% confidence interval for the mean response when $X1=X2=0$. **<br>
+```{r}
+predict(model2, data.frame(X1 = 0, X2 = 0, X1sq = 0, X2sq = 0, X1X2int = 0), interval = "confidence", level = 0.99)
+```
+
+We are 99% confident that the true mean response when $X1=X2=0$ is within the interval $[3.41719, 7.099826]$
+
+* **(i). At the significance level 0.01, test whether or not all terms involving *X2*  may be simultaneously dropped out of Model 2. State your conclusion.  **<br> 
+
+```{r}
+modelRed <- lm(Y ~ X1 + X1sq, data = data)
+
+anova(model2, modelRed)
+```
+
+Since we have an extremely low p-value, less than $\alpha = 0.01$, we reject $H_0$, concluding that one of the coefficients involving $X_2$ is non-zero. 
+
+* **(j) Find a model that has less regression coefficients AND a larger adjusted coefficient of multiple determination compared to Model 2.  Briefly explain how you reach this model. **<br>
+
+```{r}
+# Lets take out the interaction term, and X2, but keep X2 squared
+model3 <- lm(Y ~ X1 + X1sq + X2sq, data = data)
+summary(model3)
+```
+We know by the Partial $F$ test that one of the coefficients involving $X_2$ is non-zero. By removing the two variables with the highest p-value in their individual t-tests ($X_2$ and the interaction term), we have found a model with less regression coefficients and a higher $R^2_a$ of $0.7754$. If we observe the individual t-tests for all the terms, as well as the overall F test, we find statistical significance for all the parameters and the model. 

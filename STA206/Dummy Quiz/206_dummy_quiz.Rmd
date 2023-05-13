@@ -1,0 +1,40 @@
+---
+title: "STA206 Fall 2022: dummy quiz"
+author: Gianni Spiga
+output:
+  word_document: default
+  html_document: default
+---
+
+
+
+**Instruction**:  <br>
+
+* In this question, you will be asked to perform some simple tasks in R <br>
+
+
+In *dummy.Rdata* you will find a data set called *data* with two variables, *V1, V2*. 
+
+
+* **(a). Please first load the data into the R workspace. **<br> 
+
+```{r}
+#(a). (Type your code in the space below)
+load("dummy.Rdata")
+dummy <- data
+head(dummy, 10)
+```
+
+* **(b). Obtain mean and variance of these two variables. ** <br>
+ 
+```{r}
+# (b). (Type your code in the space below)
+
+#Mean Vector
+colMeans(dummy)
+
+# Variance - Covariance Matrix
+var(dummy)
+```
+
+

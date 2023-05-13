@@ -1,0 +1,204 @@
+---
+title: "Homework 1"
+author: "Gianni Spiga"
+date: "2022-10-03"
+output: html_document
+---
+
+## 7.) Simulation by R
+```{r, message = FALSE}
+library(ggplot2)
+library(plotly)
+```
+a.) 
+```{r}
+x <- seq(1, 100)
+x
+```
+b.) 
+```{r}
+w <- 2 + 0.5 * x
+w
+```
+c.)
+```{r}
+set.seed(123)
+myNormVec <- rnorm(100, sd = 5)
+cat("The mean is ", mean(myNormVec), "\n")
+cat("The standard deviation is ", sd(myNormVec), "\n")
+
+Norm.df <- data.frame(x)
+myNormDist <- as.data.frame(myNormVec)
+
+ggplotly(ggplot(data = myNormDist, aes(x = myNormVec)) + geom_histogram(bins = 15, fill = "#8a5789"))
+```
+
+We notice that even though we create a normal distribution with defined mean and standard deviation, we observe a differing sample mean and standard deviation. Observing our histogram, we also can see that our distribution is not perfectly symmetric. 
+
+d.)
+```{r}
+y <- myNormDist + w
+head(y, 15)
+```
+
+e.)
+```{r}
+Norm.df["y"] <- y
+names(Norm.df) <- c("x", "y")
+head(Norm.df)
+
+# Base size for labels is 11
+# https://ggplot2.tidyverse.org/reference/ggtheme.html
+ggplotly(
+  ggplot(data = Norm.df, aes(x = x, y = y)) +
+    geom_point(color = "#7eb6ff") +
+    ggtitle("Y Versus X") +
+    theme_grey(base_size = 11 * 1.5)
+)
+
+```
+
+f.)
+```{r}
+Beta1 <-
+  sum((Norm.df[, 1] - mean(Norm.df[, 1])) * (Norm.df[, 2] - mean(Norm.df[, 2]))) / sum((Norm.df[, 1] - mean(Norm.df[, 1])) ^2)
+
+Beta0 <- mean(Norm.df[, 2]) - Beta1 * mean(Norm.df[, 1])
+
+# Create column for predictions
+Norm.df["Ypred"] <- Beta0 + Beta1 * Norm.df["x"]
+
+
+ggplotly(
+  ggplot(data = Norm.df, aes(x = x, y = y)) +
+    geom_point(color = "#7eb6ff") +
+    geom_line(data = Norm.df, aes(x = x, y = Ypred)) +
+    ggtitle("Y Versus X") +
+    theme_grey(base_size = 11 * 1.5)
+)
+```
+We can see that the least squares line is a strong fit to our data. We notice that the relationship between Y and X is highly linear and our least squares line neatly describes the trend of the data. 
+g.)
+```{r}
+Norm.df["ei"] <- Norm.df["y"] - Norm.df["Ypred"]
+
+ggplotly(
+  ggplot(data = Norm.df, aes(x = x, y = ei)) +
+    geom_point(color = "#75a876") +
+    ggtitle("Residuals Versus X") +
+    theme_grey(base_size = 11 * 1.5)
+)
+
+cat("The MSE is", sum(Norm.df["ei"] ^ 2) / (nrow(Norm.df) - 2))
+```
+
+h.)
+```{r}
+#Empty lists for plots
+plotList <- list()
+plotList2 <- list()
+
+for (i in seq(1, 5)) {
+  set.seed(i)
+  xLoop <- x #rnorm(100, sd = 5)
+  yLoop <- rnorm(100, sd = 5) + w
+  
+  Beta1Loop <-
+    sum((xLoop - mean(xLoop)) * (yLoop - mean(yLoop))) / sum((xLoop - mean(xLoop)) ^
+                                                               2)
+  Beta0Loop <- mean(yLoop) - Beta1 * mean(xLoop)
+  
+  
+  Loop.df <- data.frame(xLoop, yLoop, Beta0Loop + Beta1Loop * xLoop)
+  names(Loop.df) <- c("x", "y", "Ypred")
+  
+  #Creating residuals column
+  Loop.df["ei"] <- Loop.df["y"] - Loop.df["Ypred"]
+  
+  #Plots for y versus x
+  p <- ggplotly(
+    ggplot(data = Loop.df, aes(x = x, y = y)) +
+      geom_point(color = "#7eb6ff") +
+      geom_line(data = Loop.df, aes(x = x, y = Ypred)) +
+      ggtitle("Y Versus X") +
+      theme_grey(base_size = 11 * 1.5)
+  )
+  plotList[[i]] <- p
+  #figList <- c(figList, Loop.df)
+  
+  #Plots for residuals versus X
+  p2 <- ggplotly(
+    ggplot(data = Loop.df, aes(x = x, y = ei)) +
+      geom_point(color = "#75a876") +
+      ggtitle("Residuals Versus X") +
+      theme_grey(base_size = 11 * 1.5)
+  )
+  plotList2[[i]] <- p2
+}
+
+
+for (i in 1:5) {
+  print(plotList[[i]])
+  print(plotList2[[i]])
+}
+```
+
+From the plots we can notice that the slop of the line changes between positive and negative while also being very close to zero. There is no repetitive pattern of the same observed line with each simulation. In regards to our residual plots, we can see random disbursement around our horizontal axis, with no signs of patterns or outliers.   \\
+
+i.) (Optional Problem)
+```{r}
+dfOpt <- data.frame(matrix(ncol = 3, nrow = 0))
+colnames(dfOpt) <- c("Beta0", "Beta1", "MSE")
+
+for (i in 1:1000) {
+  set.seed(i + 100)
+  xOpt <- x #rnorm(100, sd = 5)
+  
+  yOpt <- rnorm(100, sd = 5) + w
+  B1opt <-
+    sum((xOpt - mean(xOpt)) * (yOpt - mean(yOpt))) / sum((yOpt - mean(yOpt)) ^
+                                                           2)
+  B0opt <- mean(yOpt) - B1opt * mean(xOpt)
+  YpredOpt <- B0opt + B1opt * xOpt
+  MSEopt <- sum((yOpt - YpredOpt) ^ 2) / length(xOpt) - 2
+  
+  #dfOpt <- rbind(dfOpt, c(B0opt, B1opt, MSEopt))
+  dfOpt[i, ] <- c(B0opt, B1opt, MSEopt)
+  
+}
+
+head(dfOpt)
+```
+
+```{r}
+ggplotly(ggplot(data = dfOpt, aes(x = Beta0)) + geom_histogram(fill = "#4b0082"))
+
+cat("The mean of Beta0 is",
+    mean(dfOpt[, 1]),
+    "and the variance is",
+    var(dfOpt[, 1]),
+    ".")
+```
+
+```{r}
+ggplotly(ggplot(data = dfOpt, aes(x = Beta1)) + geom_histogram(fill = "#00824b"))
+
+cat("The mean of Beta1 is",
+    mean(dfOpt[, 2]),
+    "and the variance is",
+    var(dfOpt[, 2]),
+    ".")
+```
+
+```{r}
+ggplotly(ggplot(data = dfOpt, aes(x = MSE)) + geom_histogram(fill = "#824b00"))
+
+cat("The mean of MSE is",
+    mean(dfOpt[, 3]),
+    "and the variance is",
+    var(dfOpt[, 3]),
+    ".")
+
+```
+
+We can see from the the simulation of a thousand samples that our distributions for both $\beta_0$ and $\beta_1$ are approximately normal, The distribution of our MSE is also approximately normal. The means of all estimators approach the true value (which we define by the simulation). Between the two least squares coefficients, $\beta_0$ has less spread than $\beta_1$. 

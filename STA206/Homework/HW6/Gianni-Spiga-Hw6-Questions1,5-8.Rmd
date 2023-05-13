@@ -1,0 +1,307 @@
+---
+title: "Homework 6"
+author: "Gianni Spiga"
+date: '2022-11-08'
+output: 
+  html_document:
+    theme: journal
+    toc: TRUE
+    toc_float: TRUE
+    df_print: paged
+---
+
+## Question 1 
+
+### a.) 
+True, if the response variable has correlation 0 with all the predictor variables, then the only predictor would be the intercept, with slope 0. In the simple linear regression case, this would be a horizontal line going through the data
+
+### b.) 
+True, even if predictor variables are perfectly correlated, the model can still be a good fit for the data. Thinking geometrically, the $dim(X) <p$ in the case of multicollineairty. However, since the space exists, we can still fit the data. 
+
+### c.)
+True, since $\hat{Y} = \hat{Y}^*$, our sum of squares remains the same, thus having no influence on coefficients of multiple determination. 
+
+### d.)
+True, since the p-1 t-tests are not equivalent to testing whether there is a regression relation between Y and the set of X variables (as tested by the F test). When we have multicollinearity, this can be the case.
+
+### e.) 
+True, say for example we have a variable $X_1$ and add $X_2$, which is perfectly correlated with $X_1$. The SSR remains unchanged, however the MSR becomes smaller. This could lead to having individually significant t tests for each coefficient but an insignificant model. 
+
+### f.) 
+True, since both the error variance and the variance of the corresponding least squares estimator would be $\sigma^2$. 
+
+### g.) 
+True, $\hat{\beta}^*$ is equal to $\frac{s_y}{s_{x_k}} r_{yx_k}$, which is not influenced by other correlations with other X variables. It measures how much variation in $X_k$ can explain $Y$. 
+
+### h.) 
+True, since the the inflated variance in $\hat{\beta}^*_k$ is caused by the intercorrelation between $X_k$ and the rest of the $X$ variables. 
+
+## Question 5 
+
+### a.) 
+
+```{r, message = FALSE, warning = F}
+library(ggplot2)
+library(GGally)
+library(plotly)
+```
+
+
+```{r}
+property <- read.table("property.txt")
+colnames(property) <-
+  c("Ren.Rate", "Age", "Exp", "Vac.Rate", "Sq.Foot")
+property
+
+model1 <- lm(Ren.Rate ~ Age + Exp + Sq.Foot +  Vac.Rate, data = property)
+model1
+```
+### b.) 
+```{r}
+summary(model1)
+anova(model1)
+
+# We find the coefficient of partial determination
+R_3 <- 0.420 / (98.231 + 0.420)
+R_3
+
+# partial correlation
+r_3 <- sqrt(R_3)
+r_3
+```
+Here $R^2_{Y3|124}$ is the reduction in the SSE when we add the variable $X_3$, which here is only 0.3%. 
+
+### c.) 
+```{r, warning = F}
+addX3 <- lm(Vac.Rate ~ Age + Exp + Sq.Foot, data = property)
+
+#Regressing the residuals
+fit1 <- lm(model1$residuals ~ addX3$residuals)
+
+ggplot() + aes(x = addX3$residuals, y = model1$residuals) + geom_point() + labs(x = "e(X3|X1,X2,X4)", y = "e(Y|X1,X2,X3,X4)", title = "Added Variable Plot for X3") + geom_abline(intercept = fit1$coefficients[1], fit1$coefficients[2])
+```
+
+The added variable plot implies that $X_3$ is very little additional help in explaining $Y$ when $X_1$, $X_2$ and $X_4$ are already in the model. 
+
+### d.) 
+```{r}
+model2 <- lm(Ren.Rate ~ Age + Exp + Sq.Foot, data = property)
+fit2 <- lm(model2$residuals ~ addX3$residuals)
+summary(fit2)
+```
+We can see that the the fitted regression slope is the same value as the regression coefficient of $X_3$ from part b. 
+
+### e.) 
+```{r}
+# From part d 
+anova(fit2)
+
+anova(model1)
+```
+We can see that the $SSR(residuals) = SSR(X_3 |X_1, X_2, X_4)$. Along with that we can see that both models have the exact same SSE. 
+
+### f.) 
+```{r}
+# We find the correlation between the residuals of the models 
+r <- cor(model2$residuals, addX3$residuals)
+r
+r^2
+```
+We can see that the correlation coefficient $r$ for the residuals is the same as the correlation coefficient $r_{Y3|124}$. $r^2 = 0.00425$. 
+
+
+### g.) 
+
+```{r}
+Yresid <- lm(property$Ren.Rate ~ addX3$residuals)
+summary(Yresid)
+```
+We can see that the fitted regression coefficient for Y regressing to the residuals is the same as the fitted regression coefficient of $X_3$ from part b. This can be due to a portion of the variation in the residuals of $X_1, X_2, X_4$ can be explained by $X_3$. 
+
+## Question 6
+
+### a.) 
+```{r}
+#Lets clean up the data and return it to original form 
+property <- read.table("property.txt")
+colnames(property) <-
+  c("Ren.Rate", "Age", "Exp", "Vac.Rate", "Sq.Foot")
+property
+
+#Means of each column
+colMeans(property)
+
+# SD, we use sapply function
+sapply(property, sd)
+
+# Standardize the data
+property[,2:5] <- scale(property[,2:5])
+
+#Means of each column standardized
+round(colMeans(property),4)
+
+# S for standardized
+sapply(property, sd)
+```
+
+### b.) 
+```{r}
+modelSTD <- lm(Ren.Rate ~ Age + Exp + Sq.Foot +  Vac.Rate, data = property)
+modelSTD
+```
+
+$$
+Y_i = 15.14 - 0.94X_1 + 0.73X_2 + 0.86X_4 + 0.08X_3
+$$
+
+The fitted regression intercept for the standardized model is 15.13889. 
+
+### c.) 
+```{r}
+# ANOVA from standardized model
+anova(modelSTD)
+
+# ANOVA from model1
+anova(model1)
+```
+The ANOVA from the standardized model and the original **Model 1** have the exact same ANOVA table, with $SSE = 98.231$, $SSR = 138.328$ and $SSTO = 236.559$. 
+
+### d.) 
+```{r}
+summary(modelSTD)
+```
+The $R^2$ and $R^2_a$ are the same in the standardized model as they are in the original model, $0.5847$ and $0.5629$ respectively. 
+
+## Question 7
+
+### a.) 
+```{r}
+rxx1 <- solve(cor(property[,2:5]))
+rxx1
+
+# Variance inflation factors are the diagonal values
+diag(rxx1)
+
+sumX1 <- summary(lm(Age ~ Exp + Vac.Rate + Sq.Foot, data = property))
+1 / (1 - sumX1$r.squared)
+
+sumX2 <- summary(lm(Exp ~ Age + Vac.Rate + Sq.Foot, data = property))
+1 / (1 - sumX2$r.squared)
+
+sumX3 <- summary(lm(Vac.Rate ~ Exp +  Age + Sq.Foot, data = property))
+1 / (1 - sumX3$r.squared)
+
+sumX4 <- summary(lm(Sq.Foot ~ Vac.Rate+ Exp +  Age, data = property))
+1 / (1 - sumX4$r.squared)
+```
+We can see that the the degree of multicollinearity in this data is nothing to be concerned about, as there is no high correlation between any of the variables. We also do not have any large variance inflation factors over 10. 
+
+### b.)
+```{r}
+YX4model <- lm(Ren.Rate ~ Sq.Foot, data = property)
+YX3X4model <- lm(Ren.Rate ~ Vac.Rate + Sq.Foot, data = property)
+summary(YX4model)
+summary(YX3X4model)
+```
+We find that the regression coefficient for $X_4$ are very close to each other, going from $0.9204$ to $0.91717$. 
+
+```{r}
+anova(YX4model)
+anova(YX3X4model)
+```
+The $SSR(X_4) = 67.775$ and the $SSR(X_4|X_3) = 66.858$. We find that the $SSR(X_4)$ is slightly larger than the $SSR(X_4|X_3)$. This decrease in variation is due to the slight variation that $X_3$ adds when to the $SSR$ when included in the model. 
+
+### c.) 
+```{r}
+YX2model <- lm(Ren.Rate ~ Exp, data = property)
+YX1X2model <- lm(Ren.Rate ~ Age + Exp, data = property)
+summary(YX2model)
+summary(YX1X2model)
+```
+
+We can see that the estimated regression coefficient for $X_2$ increases from $0.7115$ to $1.0354$. 
+```{r}
+anova(YX2model)
+anova(YX1X2model)
+```
+The $SSR(X_2) = 40.503$ and the $SSR(X_2|X_1) = 72.802$. We find that the $SSR(X_2)$ is much smaller than the $SSR(X_2|X_1)$. This increase in variation is due to the deduction of SSE when $X_1$ is included in the model.
+
+
+## Question 8 
+
+### a.) 
+```{r}
+ggplotly(ggplot(data = property, aes(x = Age, y = Ren.Rate)) + geom_point())
+```
+
+We can see from the plot that there is no tell of a linear relationship between the age of a property and it's rental rate. 
+
+### b.) 
+We have model equation: 
+$$
+Y_i = \beta_0 + \beta_1\tilde{X_{i1}} + \beta_2X_{i2} + \beta_4X_{i4} +  \beta_1\tilde{X_{i1}^2}
+$$
+
+```{r}
+property["AgeCent"] <- property$Age - mean(property$Age)
+property["AgeSq"] <- property$AgeCent ^ 2
+
+polyModel <-
+  lm(Ren.Rate ~ AgeCent + AgeSq + Exp + Sq.Foot, data = property)
+summary(polyModel)
+
+#Plotting Observations Against Fitted Values
+ggplotly(
+  ggplot() + aes(x = polyModel$fitted.values, y = property$Ren.Rate) + geom_point() + labs(x = "Fitted Values", y = "Observations", title = "Observartions against Fitted Values")
+)
+```
+We have the regression function:
+$$
+Y_i = 10.19 - 0.182X_{i1} + 0.314X_{i2} + 0.00008X_{i4} + 0.014X_{i1}^2
+$$
+We find that our model is a good fit. We have a relatively good $R^2_{adj}$ as well as fairly linear Observations against Fitted Values plot. 
+
+### c.) 
+```{r}
+# Model 2
+model2 <- lm(Ren.Rate ~ Age + Exp + Sq.Foot, data = property)
+summary(model2)
+```
+
+We find that both the $R^2$ and $R^2_{adj}$ are higher in the quadratic model than the 
+**Model 2**. The $R^2$ for **Model 2** is $0.583$ and $0.6131$ for the quadratic model. The $R^2_{adj}$ for **Model 2** is $0.5667$ and $0.5927$ for the quadratic model. This would lead us to conclude that the quadratic model is a better fit than **Model 2**. 
+
+### d.)
+To test our full model versus our reduced model, we have: 
+$$
+H_0: \beta_j = 0\ \text{for all} \ j\in \mathbf J\\ 
+H_a: \text{not all} \ \beta_j: \ j\in \mathbf J\\
+$$
+With test statistic and null distribution:
+$$
+F^* = \frac{\frac{SSE(R)-SSE(F)}{df_R - df_F}}{\frac{SSE(F)}{df_F}} \\
+F^* \sim F_{(1- \alpha, df_R - df_F, df_F)}
+$$
+
+We reject $H_0$ if $F^* > F_{(1- \alpha, df_R - df_F, df_F)})$.
+
+
+```{r}
+#Find crtical value
+qf(1 - 0.05, 77-76, 77)
+
+anova(polyModel, model2)
+```
+Given that our value for our $F^*$ is $5.9078$, we reject $H_0$ and conclude that our quadratic term is significant in the model at $\alpha = 0.05$. 
+
+### e.) 
+```{r}
+#Our prediction for model 2
+predict(model2, data.frame(Age = 4, Exp = 10, Sq.Foot = 80000), interval = "prediction", level = 0.99)
+
+
+# Our prediction for quadratic model 
+predict(polyModel, data.frame(AgeCent = 4, AgeSq = 16, Exp = 10, Sq.Foot = 80000), interval = "prediction", level = 0.99)
+```
+
+We can see that when we predict with a quadratic model, we get a lower valued interval than that of the prediction with **Model 2**. 
