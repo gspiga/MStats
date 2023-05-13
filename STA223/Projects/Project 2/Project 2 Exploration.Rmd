@@ -1,0 +1,806 @@
+---
+title: "Project 2 Exploration"
+author: "Gianni Spiga"
+date: '2023-03-02'
+output: html_document
+---
+
+```{r, message = F}
+library(purrr) # getting data frame labels
+library(sjlabelled)
+library(Hmisc) # upData()
+library(dplyr)
+library(forcats) #fct_collapse 
+library(ggplot2)
+library(ggthemes) # theme_fivethirtyeight()
+library(ggformula) #stat_spline
+library(ggpubr)
+library(plotly)
+library(knitr)
+library(xtable)
+library(MASS) # stepAIC()
+library(lawstat) # Runs test 
+library(gam)
+```
+
+```{r}
+# Loading in the data 
+load("./ICPSR_38090/DS0003/38090-0003-Data.rda")
+load("./ICPSR_38090/DS0004/38090-0004-Data.rda")
+```
+
+```{r}
+crime <- da38090.0003[,1:109]
+
+# Get labels for crime dataset
+# This is the only way I have gotten it to work
+labels <- attr(da38090.0003, "variable.labels")
+labels.ls <- c(data.frame(strsplit(labels, split = "'"))[1,1:109])
+
+# Make a list of variable names
+#var.labels <- setNames(labels.ls, attr(labels.ls, "names")) # https://stackoverflow.com/questions/7535412/create-a-numeric-vector-with-names-in-one-statement
+#crime <- upData(crime, labels = var.labels)
+crime <- upData(crime, labels = labels.ls)
+#View(crime)
+
+
+# Next dataset
+#View(da38090.0004)
+# Column 455 is column which that states whether crime was reported to police or not
+
+# Going to gather Household ID and column of reports, and join on data set 0003
+ID.report <- da38090.0004[,c(2,3,4, 455, 615)]
+#ID.report
+
+labels.4 <- attr(da38090.0004, "variable.labels")
+labels.ls4 <- strsplit(labels.4, split = "'")[c(2, 3,4,455, 615)] # Column 615 is type of crime, which is particularly interesting
+
+ID.report <- upData(ID.report, labels = labels.ls4)
+
+#View(ID.report)
+# We want an inner join, where matching keys give us household information and whether or not they reported
+
+# old way, wrong
+#crime.join <- merge(crime, ID.report, by = c("IDHH", "IDPER"))
+
+# New way, correct
+crime.join.per <- merge(crime, ID.report, by = c("YEARQ", "IDPER"))
+#View(crime.join)
+
+# This is our response
+#xtable(table(crime.join.per$V4399))
+```
+
+# Data Cleaning 
+
+```{r}
+#View(crime.join)
+
+# What values are in "V3001"
+#table(crime.join$V3001) # just one value, drop it col # 3
+
+# V3003 is the same as YEARQ, drop V3003, col # 6
+#with(crime.join, table(YEARQ))
+
+# We have types of crimes, V3081, however, if a person experiences 5 incidents, they are reported 5 times, which creates a dependency issue. We will randomly sample just one crime from those who experienced more than one incident
+crime.join.per <- crime.join.per %>% group_by(IDPER) %>% slice_sample(n = 1)
+
+# We need to ungroup the data so that we can drop the ID column 
+crime.join.per <- crime.join.per %>%
+  ungroup() 
+
+# We can drop the ID columns now, since the data is merged
+# Lots of columns are strata numbers, which could be explored later, but for the purpose of this analysis, will not include
+# V3006 Household number, could be interesting, ref codebook, not sure how to interpret yet
+# 2 Age columns, drop the allocated one, they seem to be identical, same with sex (v3018), hispanic origin ("V3024A")
+data.frame(crime.join.per$V3013, crime.join.per$V3014)
+# Also drop V3026-27, month and year interview was completed
+# V3086 is sexual identity and V3017 is Sex, we will use sex 
+cols2drop <-
+  c(
+    "IDPER",
+    "IDHH.x",
+    "V3001",
+    "V3002",
+    "V3003",
+    "V3004",
+    "V3005",
+    "V3008",
+    "V3009",
+    "V3010",
+    "V3014",
+    "V3016",
+    "V3018",
+    "V3024A",
+    "V3026",
+    "V3027",
+    "V3048",
+    "V3054",
+    "V3060",
+    "V3069",
+    "V3080",
+    "V3082",
+    "V3085",
+    "V3086",
+    "V3077",
+    "WGTPERCY",
+    "PER_TIS",
+    "PERBOUNDED",
+    "IDHH.y",
+    "PERINTVNUM"
+  )
+
+# Count the NAs in all columns and find what is the proportion of them to the entire data set
+#NAprop <- crime.join.per %>% dplyr::select(everything()) %>% summarise_all(funs(sum(is.na(.)) / nrow(crime.join.per))) # Uses deprecated and superseded functions
+NAprop <- crime.join.per %>% dplyr::summarise(across(everything(), ~ (sum(is.na(.x)) / nrow(crime.join.per)))) # only works for ungrouped data
+#NAprop <- colSums(is.na(crime.join.per)) / nrow(crime.join.per) # This works
+
+# Find all the columns where more than 10% NA
+NAmore50 <- which(NAprop > 0.1)
+#NAprop[NAmore50]
+#View(crime.join[NAmore50]) 
+
+crime.red <- dplyr::select(crime.join.per, -all_of(NAmore50))
+crime.red <- dplyr::select(crime.red, -all_of(cols2drop))
+
+# # Now look at rows 
+# # how many NA in the response
+# length(sum(is.na(crime.red$V4399)))
+# # We drop the 1 
+# crime.red <- crime.red %>% filter(!is.na(V4399))
+# 
+# # How many rows are missing more than 10% of data 
+# NArows <- which(rowSums(is.na(crime.red)) > round(0.1 *ncol(crime.red))) # 1446
+# 
+# # Drop these rows 
+# crime.red <- crime.red %>% filter(!row_number() %in% NArows)
+
+# Rid of all NAs remaining
+crime.red <- crime.red %>% na.omit()
+
+#Lets revist our response
+#table(crime.red$V4399)
+#str(crime.red$V4399)
+
+# We will drop rows with "Don't know" or "Residue"
+crime.red <-
+  crime.red %>% filter(
+    V3015 != "(8) Residue" &
+      V3020 != "(98) Residue" &
+      V3024 != "(8) Residue" &
+      V3044 != "(8) Residue" &
+      V3_V4526H3A != "(8) Residue" &
+      V3_V4526H3B != "(8) Residue" &
+      V3_V4526H5 != "(8) Residue" &
+      V3_V4526H4 != "(8) Residue" &
+      V3_V4526H6 != "(8) Residue" &
+      V3_V4526H7 != "(8) Residue" &
+      V3083 != "(8) Residue" &
+      V3084 != "(8) Residue" &
+      #V3085 != "(8) Residue" &
+      #V3086 != "(8) Residue" &
+      V3087 != "(8) Residue" &
+      V3079 != "(8) Residue" &
+      V3071 != "(8) Residue" &
+      V4399 != "(3) Don't know" & V4399 != "(8) Residue"
+  )
+
+# Any factors with only one level? 
+sapply(1:ncol(crime.red), function(i) length(table(crime.red[, i])))
+
+#View(crime.red)
+
+# Getting table for report Appendix of variable descriptions
+labels.red <- c(sapply(crime.red, attr, "label"))
+#var.names <- c(attr(crime.red, "names"))
+xtable(data.frame(labels.red))
+
+```
+
+# Data Visualization
+
+```{r}
+# Histogram of Age Split of by Whether reported to Police
+ggplotly(
+  ggplot(crime.red, aes(x = V3013, fill = V4399)) + geom_histogram() + fill_palette("jco") + theme_igray() + labs(x = "Age", y = 'Count', title = "Distribution of Age Colored by Whether Reported to Police or Not")
+)
+
+# Weight seperarated by V4399
+# NOT PUTTING IN REPORT
+#ggplotly(ggplot(crime.red, aes(x = V3080, fill = V4399)) + geom_histogram())
+
+# type of crime and whether it was reported to the police
+# NOT PUTTING IN REPORT
+# ggplotly(
+#   ggplot(data = crime.red, aes(x = V4529, fill = V4399)) + geom_bar() + theme_igray() + theme(axis.text.x = element_text(
+#     angle = 90,
+#     vjust = 0.5,
+#     hjust = 1,
+#   )) + fill_palette("jco")
+# )
+# table(crime.red$V4529)
+
+# Tables
+# police report vs hispanic orgin
+kable(table(crime.red$V4399, crime.red$V3024)[1:2, 1:2])
+
+#ggballoonplot(crime.red, x = "V4399", y = "V3017", size = "V3013", fill = "V3013")
+
+
+# Police report vs Sex
+kable(table(crime.red$V4399, crime.red$V3017)[1:2, 1:2])
+
+# Distribution of Counts for Educational Attainement 
+# IN REPORT
+ggplotly(
+  ggplot(data = crime.red, aes(x = V3020)) + geom_bar(fill = "goldenrod") + theme_igray() + theme(axis.text.x = element_text(
+    angle = 45,
+    vjust = 0.5,
+    hjust = 1,
+  )) + labs(x = "Educational Attainement", y = "Count", title = "Distributiuon of Counts of Educational Attainement Before Re-encoding"))
+```
+
+
+# Model Building and Data Recoding
+ 
+```{r}
+model1 <- glm(V4399 ~ ., data = crime.red, family = binomial())
+summary(model1)
+
+# One does not converge, V3061(1) Yes : lets check it out 
+#table(crime.red$V3061)
+# No obvious sign of why no convergence, we will drop 
+crime.red2 <- dplyr::select(crime.red,-"V3061")
+
+
+# Recode Education
+#table(crime.red2$V3020)
+length(unique(crime.red$V3020))
+crime.red2 <-
+  crime.red2 %>% mutate(V3020 = fct_collapse(
+    V3020,
+    "Below Associates" = c(
+      "(00) Nev/kindergrtn",
+      "(01) 1:Elementary",
+      '(02) 2:Elementary',
+      '(03) 3:Elementary',
+      '(04) 4:Elementary',
+      '(05) 5:Elementary',
+      '(06) 6:Elementary',
+      '(07) 7:Elementary',
+      '(08) 8:Elementary',
+      "(09) 9:High school",
+      "(10) 10:High school",
+      "(11) 11:High school",
+      "(27) 12th grade(no diploma)",
+      "(28) High school grad", 
+      "(40) Some college(no degree)"
+    ),
+    Undergraduate = c(
+      "(41) Associate degree",
+      "(42) Bachelor degree"
+    ),
+    Graduate = c(
+      "(43) Master degree",
+      "(44) Prof school degree",
+      "(45) Doctorate degree"
+    )
+  ))
+
+# IN REPORT
+ggplotly(
+  ggplot(data = crime.red2, aes(x = V3020)) + geom_bar(fill = "goldenrod")  + theme_igray() + theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  )) + labs(x = "Educational Attainement", y = "Count", title = "Distributiuon of Counts of Educational Attainement After Re-encoding")
+) 
+
+# Recode Marital Status
+# Combining Widowed, Divorced, and Seperated would balance
+table(crime.red2$V3015)
+crime.red2 <-
+  crime.red2 %>% mutate(V3015 = fct_collapse(
+    V3015,
+    "Married" = c(
+      "(1) Married"
+    ),
+    "Lost Partner" = c(
+      "(2) Widowed",
+      '(3) Divorced',
+      '(4) Separated'
+    ),
+    "Never Married" = c(
+      "(5) Never married"
+    )))
+
+# Citizenship
+table(crime.red2$V3083)
+# Let's combine to citizen or not
+crime.red2 <-
+  crime.red2 %>% mutate(V3083 = fct_collapse(
+    V3083,
+    "Yes, Citizen" = c(
+      "(1) Yes, born in the United States",
+      "(2) Yes, born in Puerto Rico, Guam, the U.S. Virgin Islands, or Northern Marianas",
+      "(3) Yes, born abroad of U.S. citizen parent or parents",
+      "(4) Yes, citizen by naturalization"
+    )))
+
+# Race 
+table(crime.red2$V3023A)
+length(unique(crime.red$V3023A))
+# Reduce race categories
+crime.red2 <-
+  crime.red2 %>% mutate(V3023A = fct_collapse(
+    V3023A,
+    "2 or 3 Races" = c(
+      "(06) White-Black",
+      "(07) White-Amer Ind",
+      "(08) White-Asian",
+      "(09) White-Hawaiian",
+      "(10) Black-Amer Ind",
+      "(11) Black-Asian",
+      "(12) Black-Hawaiian/Pacific Ils",
+      "(13) American Indian-Asian",
+      "(14) Asian-Hawaiian/Pacific Ils",
+      "(15) White-Black-American Ind",
+      "(16) White-Black-Asian",
+      "(17) White-Amer Ind-Asian",
+      "(18) White-Asian-Hawaiian",
+      "(19) 2 or 3 races"
+    ),
+    "Asian, Pac.Isl.,\n or Amer.Ind. only" = c(
+      "(04) Asian only",
+      "(05) Hawaiian/Pacific IS only",
+      "(03) Am Ind/AK native only"
+      )))
+# Drop 4 or more races since only one observation 
+crime.red2 <-
+  crime.red2 %>% filter(
+    V3023A != "(20) 4 or 5 races"
+  )
+
+
+# Dropping Months since we already have a variable explaining which quarter of the year the interview took place, months is overkill
+#table(crime.red2$YEARQ)
+#table(crime.red$V3025)
+crime.red2 <- dplyr::select(crime.red2,-"V3025")
+
+# Lets observe current school status
+table(crime.red2$V3079)
+# Combine all schools
+crime.red2 <-
+  crime.red2 %>% mutate(V3079 = fct_collapse(
+    V3079,
+    "Current Student" = c(
+      "(0) Regular school",
+      "(1) College/univ",
+      "(2) Trade school",
+      "(3) Voc school"
+    ))) 
+
+# Active Duty variable 
+table(crime.red2$V3087)
+crime.red2 <-
+  crime.red2 %>% mutate(V3087 = fct_collapse(
+    V3087,
+    "Has Been or Is on Active Duty" = c(
+      "(2) Only on active duty for training in the Reserves or National Guard",
+      "(3) Now on active duty",
+      "(4) On active duty in the past, but not now"
+    )))
+
+# Sexuality
+table(crime.red2$V3084)
+crime.red2 <-
+  crime.red2 %>% mutate(V3084 = fct_collapse(
+    V3084,
+    "Not Straight" = c(
+      "(1) Lesbian or gay",
+      "(3) Bisexual",
+      "(4) Something else"
+    )))
+
+#table(crime.red2$V3086)
+
+#View(crime.red2)
+
+# Extra Visualization 
+ggplotly(
+  ggplot(data = crime.red2, aes(y = V3023A)) + geom_bar(aes(fill = V3017), color = "white") + theme_igray() + scale_y_discrete(
+    labels = function(x)
+      stringr::str_wrap(x, width = 10)
+  ) + facet_wrap(~ V4399) + fill_palette("jco") + labs(
+    x = "Race",
+    y = "Count",
+    fill = "Sex",
+    title = "Bar Plot of Reported to Police by Race and Sex"
+  )
+)
+
+ggplotly(
+  ggplot(data = crime.red2, aes(x = V3023A)) + geom_bar(aes(fill = V3017), color = "white") + facet_wrap(~ V4399) + fill_palette("jco") + theme(axis.text.x = element_text(
+    angle = 90,
+    vjust = 0.5,
+    hjust = 1
+  )) + labs(
+    x = "Race",
+    y = "Count",
+    fill = "Sex",
+    title = "Bar Plot of Reported to Police by Race and Sex"
+  )
+)
+
+ggplotly(
+  ggplot(data = crime.red2, aes(x = V3081, fill = V3015)) + geom_bar() + theme_igray() + facet_wrap(~ V4399) + fill_palette("jco") + labs(
+    x = "Number of Incidents Reported (In Survey)",
+    y = "Count",
+    fill = "Marital Status",
+    title = "Distribution of Number Incidents versus Reported to Police by Marital Status"
+  )
+)
+
+crime.red2 <-
+  crime.red2 %>% mutate(
+    V4529 = fct_collapse(
+      V4529,
+      "Rape/Sexual Assault" = c(
+        "(01) Completed rape",
+        "(02) Attempted rape",
+        "(03) Sex aslt w s aslt",
+        "(04) Sex aslt w m aslt",
+        "(15) Sex aslt wo inj",
+        "(16) Unw sex wo force"
+      ),
+      "Robbery/Burglary" = c(
+        "(05) Rob w inj s aslt",
+        "(06) Rob w inj m aslt",
+        "(07) Rob wo injury",
+        "(21) Purse snatching",
+        "(08) At rob inj s asl",
+        "(09) At rob inj m asl",
+        "(10) At rob w aslt",
+        "(22) At purse snatch",
+      #  "Burglary" = c(
+        "(31) Burg, force ent",
+        "(32) Burg, ent wo for",
+        "(33) Att force entry"
+      ),
+      "Assault" = c(
+        "(11) Ag aslt w injury",
+        "(12) At ag aslt w wea",
+        "(13) Thr aslt w weap",
+        "(14) Simp aslt w inj",
+        "(17) Asl wo weap, wo inj"
+      ),
+      "Verbal Threat" = c(
+        "(18) Verbal thr rape",
+        "(19) Ver thr sex aslt",
+        "(20) Verbal thr aslt"
+      ),
+      "Motor Theft" = c("(40) Motor veh theft",
+                        "(41) At mtr veh theft"),
+      "Theft" = c(
+        "(23) Pocket picking",
+        "(54) Theft < $10",
+        "(55) Theft $10-$49",
+        "(56) Theft $50-$249",
+        "(57) Theft $250+",
+        "(58) Theft value NA",
+        "(59) Attempted theft"
+      )
+    )
+  )
+
+crime.red2 <- within(crime.red2, V4529 <- relevel(V4529, ref = 4))
+
+xtable(table(crime.red$V4529))
+xtable(table(crime.red2$V4529))
+
+# Recode number of incidents to binary, 1 or 2+ (max being 10)
+crime.red2$V3081 <- as.factor(crime.red2$V3081)
+crime.red2 <-
+  crime.red2 %>% mutate(V3081 = fct_collapse(
+    V3081,
+    "2+" = c("2", "3", "4","5", "6", "7", "8", "9", "10")
+  ))
+
+
+# type of crime and whether it was reported to the police AFTER REENCODING
+### IN REPORT
+ggplotly(
+  ggplot(data = crime.red2, aes(x = V4529, fill = V4399)) + geom_bar() + theme_igray() + theme(axis.text.x = element_text(
+    angle = 25,
+    vjust = 0.5,
+    hjust = 1,
+  )) + fill_palette("jco") + labs(x = "Type of Crime (Re-encoded)", y = "Count", fill = "Reported to Police", title = "Distribution of Types of Crimes Colored by if they were Reported to Police")
+)
+
+### IN REPORT
+ggplotly(
+  ggplot(data = crime.red2, aes(x = V3017, fill = V4529)) + geom_bar() + theme_igray() + facet_wrap( ~ V4399) + fill_palette("jco") + labs(
+    x = "Sex",
+    y = "Count",
+    fill = "Type of Crime",
+    title = "Types of Crime Seperated by Sex and if it was Reported to the Police"
+  )
+)
+
+
+# AGE, MARITAL STATUS, Victim knew attacker?
+# IN REPORT
+ggplotly(
+  ggplot(crime.red2, aes(
+    x = V3015, y = V3013, fill = V3044
+  )) + geom_boxplot() + theme_igray() + fill_palette("jco") + labs(
+    x = "Marital Status",
+    y = "Age",
+    fill = "Known Attacker",
+    title = "Boxplots of Age Grouped by Marital Status Colored by if Victim Knew Attacker"
+  )
+) %>% layout(boxmode = "group") #facet_wrap(~V4399, ncol = 2) / +facet_wrap(~V3017, ncol = 2)
+
+# Reported Police vs Police Something Else
+#table(crime.red2$V4399, crime.red2$V3048)
+
+
+model2 <- glm(V4399 ~ ., data = crime.red2, family = binomial())
+summary(model2)
+
+length(model2$coefficients)
+
+# Step BIC on Model 
+n = nrow(crime.red2)
+```
+
+
+```{r}
+# Data Visualization after recoding 
+# Police Report vs Education
+#kable(table(crime.red2$V4399, crime.red2$V3020)[1:2,c(1,9,10)])
+
+# Stepwise Regression for Main Effects Model
+model.step <- stepAIC(model2, trace = F, k = log(n))
+summary(model.step)
+
+crime.red3 <- dplyr::select(crime.red2, all_of(c(attr(model.step$terms, "term.labels"), "V4399")))
+
+# Recode Counts as categorical
+# crime.red3$V3081 <- as.factor(crime.red3$V3081)
+# crime.red3 <-
+#   crime.red3 %>% mutate(V3081 = fct_collapse(
+#     V3081,
+#     "2+" = c("2", "3", "4","5", "6", "7", "8", "9", "10")
+#   ))
+#table(crime.red3$V3081)
+
+model.red.int <-
+  glm(
+    V4399 ~ .^2,
+    data = crime.red3,
+    family = "binomial"
+  )
+summary(model.red.int)
+
+# Stepwise regression on interaction model 
+model.step.int <- stepAIC(model.red.int, trace = F, k = log(n))
+summary(model.step.int)
+
+# Experimenting with gam
+model.gam2<-
+  gam(
+    V4399 ~ s(V3013, 2) + V3015 + V3042 + V3044 + V3081 + V4529,
+    family = "binomial",
+    data = crime.red2
+  )
+summary(model.gam2)
+
+# Cubic Spline
+model.gam3<-
+  gam(
+    V4399 ~ s(V3013, 3) + V3015 + V3042 + V3044 + V3081 + V4529,
+    family = "binomial",
+    data = crime.red2
+  )
+summary(model.gam3)
+
+plot(crime.red2$V3013, model.gam$smooth)
+
+# #Fix column V3034, V3044
+# crime.red2 <-
+#   crime.red2 %>% mutate(V3034 = fct_collapse(
+#     V3034,
+#     "Yes" = c(
+#       "(1) Yes"
+#     ), "No" = c(
+#       "(2) No"
+#     )))
+# 
+# crime.red2 <-
+#   crime.red2 %>% mutate(V3044 = fct_collapse(
+#     V3044,
+#     "Yes" = c(
+#       "(1) Yes"
+#     ), "No" = c(
+#       "(2) No"
+#     )))
+# 
+# crime.red2 <-
+#   crime.red2 %>% mutate(V3048 = fct_collapse(
+#     V3048,
+#     "Yes" = c(
+#       "(1) Yes"
+#     ), "No" = c(
+#       "(2) No"
+#     )))
+# 
+# # Combine V3034 and V3044
+# crime.red2$NoTheftNoKnown <- # interaction term between V3034 (somethng being stolen) and V3044 (attacker known)...both for no
+#   as.factor(with(crime.red2, ifelse(V3034 == "No" &
+#                             V3044 == "No", "No", "Yes")))
+# # Relevel for Yes as reference
+# crime.red2 <- within(crime.red2, NoTheftNoKnown <- relevel(NoTheftNoKnown, ref = 2))
+# data.frame(crime.red2$NoTheftNoKnown, crime.red2$V3034, crime.red2$V3044)
+# 
+# # Also Combine V3034 and V3048
+# crime.red2$NoTheftNoOtherCall <- # interaction term between V3034 (somethng being stolen) and V3048 (were police called for anything else)...both for no
+#   as.factor(with(crime.red2, ifelse(V3034 == "No" &
+#                             V3048 == "No", "No", "Yes")))
+# # Relevel for Yes as reference
+# crime.red2 <- within(crime.red2, NoTheftNoOtherCall <- relevel(NoTheftNoOtherCall, ref = 2))
+# 
+# Recode Marital status to "Married/Was Married" and "Never Married"
+crime.red3 <-
+  crime.red3 %>% mutate(V3015 = fct_collapse(
+    V3015,
+    "Married/Was Married" = c(
+      "Married",
+      "Lost Partner"
+    )))
+# Combine Robbery/Burglary W Theft
+crime.red3 <-
+  crime.red3 %>% mutate(V4529 = fct_collapse(
+    V4529,
+    "Theft/Rob./Burg" = c(
+      "Theft",
+      "Robbery/Burglary"
+    )
+  ))
+
+# Build a final int model, now just using the interaction term for V3081
+model.fin <-
+  glm(V4399 ~
+        V3013 + V3015 + V3042 + V3044 + V3081 + V4529,
+      data = crime.red3,
+      family = "binomial") # Model excludes V3034 and the interaction term between 34 and 44 is now a new variable encoded, int term between 34 and 48 also encoded
+summary(model.fin)
+
+# Experimenting with gam
+model.gam2<-
+  gam(
+    V4399 ~ s(V3013, 2) + V3015 + V3042 + V3044 + V3081 + V4529,
+    family = "binomial",
+    data = crime.red2
+  )
+summary(model.gam2)
+
+# Cubic Spline
+model.gam3<-
+  gam(
+    V4399 ~ s(V3013, 3) + V3015 + V3042 + V3044 + V3081 + V4529,
+    family = "binomial",
+    data = crime.red2
+  )
+summary(model.gam3)
+
+plot(crime.red2$V3013, model.gam$smooth)
+
+model.gam$coefficients
+
+
+# Questions for OH 3/14
+# 1. V3081 (number of incidents reported), is this variable justifiable? If so, can I not use it as a main effect? Should I keep it as numeric or convert to categorical? 
+# ANSWER: We have a dependency problem, because a person shows up independently, solution: randomly sample 1 of the persons who experiences more than one crime just to show up once in the data. 
+# 2. I do not think there are any obvious outliers, double check
+# Can I use LRT for comparing GLM to GAM? How else to compare? No commonly used tests
+
+
+  
+# F test involves df of parameters as well as residuals, which is why different from asymptotic normality
+# Refer to lab code to visualize the nonlinear code 
+  
+  
+# Questions for OH 
+# 1. V3081 is number of crimes in past household has faced, should it be left as numeric interger or factor?
+# 2. Given so many predictors, to what extent should each one be talked about in report/presentation?
+# 3.   
+
+
+```
+# Our final model
+$$
+logit(E(Y_{Report}|X)) = \beta_0 + \beta_1X_{Age} + \beta_2X_{MaritalStatus} +\beta_3X_{OthAtk} +  \beta_4X_{AtkerKnown} + \beta_4X_{NumOfInc} + \beta_5X_{TOC}
+$$
+```{r}
+sumFin <- summary(model.fin)
+# Creating 95% CI for coefficients
+coefCI <- cbind(sumFin$coef[,1], sumFin$coef[,1] - 1.96*sumFin$coef[,2], sumFin$coef[,1] + 1.96*sumFin$coef[,2])
+colnames(coefCI) <- c("Coefficient", "95% CI Lower", "95% CI Upper")
+coefCI
+xtable(coefCI)
+
+
+```
+# Model Diagonostics
+
+```{r}
+# Residuals for interaction model
+res.P.int = residuals(model.fin, type="pearson")
+res.D.int = residuals(model.fin, type="deviance") #or residuals(fit), by default
+#boxplot(cbind(res.P.int, res.D.int), names = c("Pearson", "Deviance"))
+
+ggplotly(
+  ggplot() + aes(x = model.fin$fitted.values, y = res.D.int) + geom_point() + theme_igray() + stat_spline(
+    spar = 1,
+    size = 0.8,
+    color = "#cd534cff"
+  ) + labs(x = "Fitted Values", y = "Deviance Residuals", title = "Deviances Residuals vs. Fitted Values for the Final Model")
+)
+
+runs.test(y = res.D.int, plot.it = T)
+
+# Residuals for GAM model
+# res.P.gam = residuals(model.gam, type="pearson")
+# res.D.gam = residuals(model.gam, type="deviance") #or residuals(fit), by default
+# #boxplot(cbind(res.P.gam, res.D.gam), names = c("Pearson", "Deviance"))
+# 
+# ggplotly(
+#   ggplot() + aes(x = model.gam$fitted.values, y = res.D.gam) + geom_point() + stat_spline(spar = 1.1, size = 0.8, color = "firebrick") + labs(x = "Fitted Values", y = "Deviance Residuals", title = "Deviances Residuals vs Fitted Values for GAPLM Model")
+# )
+
+#runs.test(y = res.D.gam, plot.it = T)
+
+# outliers
+plot(model.fin, which = 4) # Observations with the largest Cook's distance are 2778, 6064, and 1988
+plot(model.fin, which = 5)
+
+
+# Outliers - highlight all three lines to save image
+png(file="cooksCrime.png")
+plot(model.fin, which = 4)
+while (!is.null(dev.list()))  dev.off()
+
+png(file="leverageCrime.png")
+plot(model.fin, which = 5)
+dev.off()
+
+# Older people who were all raped/SA and all 3 reported the crime.
+crime.red3[c(262, 2286,3317),]
+
+with(crime.red3, table(V3015, V4529))
+summary(crime.red3$V3013[crime.red3$V3015 == "Never Married"])
+with(crime.red3, table(V3015, V4529))
+
+# Questions for OH
+# 1. How to deal with redundant interactions in manual building of model, which results in NA?
+# 2. In building a GAM model, how can I go about building confidence intervals for each Beta coefficient # bootstap or find std error of coefficients
+# 3. Assistance in interpreting residual plots, am I oversmoothing the spline? FOLLOW UP: Taken care of 
+# 4. GLM Z test for Beta tells significance for different variables than GAM F test, which one should be trusted?
+
+
+# Notes 
+# box plot 2x2 table to check for multicollinear
+# Chi square test for independence 
+
+# GAM MODEL is not as good as interaction model
+
+
+
+
+### Notes for what has to be worked on tonight
+# 1. I have to completely rerun all the analysis, and EDA, with the new data merge, should not be too difficult, including type of crime da38090.0004$V4529 would be really interesting, lots of levels
+# 2. I need to figure out what it means for multiple incidents, if someone has multiple incidents, do they have multiple rows? I will investigate tonight. Otherwise, I will only include those who reported one incident for simplificiation
+# 3.I can look at some other incident columns (cant take too long) from da38090.004 to include in the model
+# 4. In the report, I need to update all the eda, the description of the data, as well as how the data sets are being joined, why they are being joined, and what the seperate datasets mean
+```
