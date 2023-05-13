@@ -1,0 +1,781 @@
+---
+title: "Spike Analysis of Mice Visual Stimuli"
+author: "Gianni Spiga"
+date: "March 5, 2023"
+abstract: "We model five sessions of the experiments by Steinmetz et al. in their measure of neurons mean firing rates when presented with left and right contrasts to the visual cortex. The data is discussed and visualized using histograms. We perform a mixed effects two-way ANOVA to model the mean firing rate of these neurons, performing sensitivity analysis after. We then use logistic regression and variants to predict the feedback outcome for both mice across sessions. Results are discussed along with caveats of the data and the analysis. "
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    number_sections: yes
+    theme: flatly
+    code_folding: hide
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H')
+```
+
+```{r, messsage = F, warning = F, include = F}
+library(ggplot2)
+library(plotly) 
+library(lme4)
+library(knitr)
+library(dplyr)
+library(ggthemes) # theme_igray()
+library(ggformula) #stat_spline
+library(car)
+library(forcats) #fct_collapse 
+library(MASS)
+library(gam)
+library(lawstat)
+library(caret)
+```
+
+
+# Introduction
+
+The scale of complexity a a human brain has over that of a mouse is well
+known among neuroscientists. The structure of a mouse brain is very
+similar in structure and function to a human brain, thus making them an
+interest of study in neurological testing. In this analysis, we look at
+data from a recent experiment by Steinmetz et al. (2019) which observed
+the activity of neurons in the visual cortex of mice when presented with
+stimuli. Following this, the mice were required to make a decision,
+using a wheel which was controlled by their forepaws. Their decision
+foretold whether they received an award or a penalty.
+
+# Background
+
+The data set we will be using only looks at two of the ten mice in the
+study, Cori and Forssmann from mid-December 2016 to early November 2017.
+Both mice had varying number of trials, with 39 tracked times for each
+trial. Since these five sessions have varying amounts of trials, we look
+for a way to minimize the data from these five sessions into one long
+data set. To do this, we first must create an accurate response variable
+for our model, one that we can compare imbalanced trials between
+sessions. We choose to compare the mean firing rates for each trial in
+each session. This measure would be the average number of spikes per
+seconds across all neurons measuring within a 0.4 second interval. The
+choice of 0.4 seconds as our interval is by design of the experiment,
+which focused on spike trains of neurons from the presenting of the
+stimuli to 0.4 seconds after. The resulting data frame, from the five
+merged sessions, is shown below. We have a data set of 1196 trials,
+spanning across the 5 sessions, with the mean firing rate, the left and
+right contrasts, feedback type, and an ID column for which session the
+trial came from.
+
+```{r, message = F, rows.print = 5}
+ses1 <- readRDS("./Data/session1.rds")
+ses2 <- readRDS("./Data/session2.rds")
+ses3 <- readRDS("./Data/session3.rds")
+ses4 <- readRDS("./Data/session4.rds")
+ses5 <- readRDS("./Data/session5.rds")
+
+
+session=list()
+for(i in 1:5){
+  session[[i]]=readRDS(paste('./Data/session',i,'.rds',sep=''))
+  print(session[[i]]$mouse_name)
+  print(session[[i]]$date_exp)
+}
+
+
+# id=11
+# session[[5]]$feedback_type[id]
+# session[[5]]$contrast_left[id]
+# session[[5]]$contrast_right[id]
+# length(session[[1]]$time[[id]])
+# dim(session[[5]]$spks[[id]])
+
+#ID=1
+t=0.4 # from Background 
+
+# Rows of contrast is quantity of trials (varying)
+# rows of spikes/times is quantity of neurons (varying)
+# columns of spikes/times is tracked sessions of brain (fixed)
+# 
+# n.trials=length(session[[ID]]$spks)
+# # Number of nuerons is the rows of spikes. which varies 
+# n.neurons=dim(session[[ID]]$spks[[1]])[1]
+# 
+# # Obtain the firing rate 
+# firingrate=numeric(n.trials)
+# for(i in 1:n.trials){
+#   firingrate[i]=sum(session[[ID]]$spks[[i]])/n.neurons/t
+# }
+# firingrate
+
+firingrate <- c()
+total.fire.rate <- sapply(1:5, function(i)
+  sapply(1:length(session[[i]]$spks), function(j)
+    firingrate = c(firingrate, sum(session[[i]]$spks[[j]]) / dim(session[[i]]$spks[[j]])[1] / t)))
+
+# Flatten the list of lists
+rates.flat <- (unlist(total.fire.rate))
+mice <- data.frame("Firing.Rate" = rates.flat)
+
+# Now create dataframe to join with session as a variable as well
+contrast.dat <- data.frame()
+abc <- sapply(1:5, function(i)
+  cbind(
+    session[[i]]$contrast_left,
+    session[[i]]$contrast_right,
+    session[[i]]$feedback_type,
+    rep(i, length(session[[i]]$contrast_left))
+  ))
+contrast.dat <- do.call(rbind, abc)
+
+# Merge data.frames
+mice <- cbind(mice, contrast.dat)
+colnames(mice) <-
+  c("Firing.Rate", "C.Left", "C.Right", "Feedback_Type", "Session")
+
+# Convert mice Session into factor
+cols2fac <- c("C.Left", "C.Right", "Feedback_Type", "Session")
+mice[cols2fac] <- lapply(mice[cols2fac], factor)
+mice
+```
+
+# Descriptive analysis
+
+Before we begin our analysis, we will report some summary statistics of
+the data as well as visualizations to understand our data with more
+depth. Below we print a five number summary of our response, the mean
+firing rate. We can see from the table that the lowest mean firing rate
+is 0.404 and the largest is 7.219. However, with a median of 2.962, we
+speculate the distribution of our mean firing rate will have some skew,
+which we will plot below colored by Feedback Type and Session number.
+
+```{r, warning = F, fig.size = "80%"}
+sum.Fire <- as.data.frame(c(summary(mice$Firing.Rate)))
+colnames(sum.Fire) <- "Firing.Rate"
+kable(sum.Fire)
+# Create Histograms,
+# separated by Session
+ggplotly(
+  ggplot(mice, aes(x = Firing.Rate, fill = Session)) + geom_histogram(
+    bins = 22,
+    alpha = 0.8,
+    position = "identity"
+  )  + theme_igray() + labs(
+    x = "Firing Rate",
+    y = "Count",
+    fill = "Session",
+    title = "Histograms of Firing Rates Colored by Session"
+  )
+)
+
+# Separated by Feedback Type
+ggplotly(
+  ggplot(mice, aes(x = Firing.Rate, fill = Feedback_Type)) + geom_histogram(
+    position = "dodge",
+    bins = 15,
+    alpha = 0.9
+  ) + theme_igray() + scale_fill_manual(values = c("#56B4E9", "#E69F00", "#999999")) + labs(
+    x = "Firing Rate",
+    y = "Count",
+    fill = "Feedback Type",
+    title = "Histograms of Firing Rates Colored by Feedback Type"
+  )
+)
+
+# Separated by Feedback Type, NOT OUTPUTTING
+# ggplotly(ggplot(mice, aes(x = Firing.Rate, fill = Feedback_Type)) + geom_histogram(position = "identity", bins = 22, alpha = 0.5) + scale_fill_manual(values=c("#E69F00","#999999", "#56B4E9")))
+```
+
+The histograms of our firing rates show us with each session performed,
+the distribution of firing rates shifts towards zero more and more. The
+session with the highest firing rate is session 1 and the lowest firing
+rate is session 5. Using the interactive plot to isolate each histogram
+by session, we can also see that each session is heavily right skewed on
+its own, except for Session 2. This session appears to have more
+symmetry, with heavier tails. Separating by Feedback Type, we can see
+more mice were given rewards than penalties for all firing rates except
+those who had firing rates between 0.75 and 1, where there was just one
+more ice penalized than rewarded.
+
+Overall from these distributions, we can see our earlier suspicion was
+correct regarding skew. The left portion of the histograms has more
+observations than the right tails. While this skew is apparent, it is
+not a strong departure, visually at least, from normality, which we will
+assess *Sensitivity Analysis*.
+
+```{r, warning = F, message = F}
+# Box Plots 
+# For Left Contrast
+#ggplot(mice, aes(x = C.Left, y= Firing.Rate, fill = C.Left)) + geom_boxplot()
+# Right Contrast
+#ggplot(mice, aes(x = C.Right, y= Firing.Rate, fill = C.Right)) + geom_boxplot()
+```
+
+# Inferential analysis
+
+Our goal is to build a mixed effects model for the firing rates of
+neurons with fixed effects contrast left $\alpha_i$, contrast right
+$\beta_j$, their interaction $\alpha\beta_{ij}$, and the random effect
+$\gamma_k$ of each session. We have the following model:
+
+$$ 
+Y_{ijkl} = \mu + \alpha_i + \beta_j + \alpha\beta_{ij} + \gamma_k + \epsilon_{ijkl}
+$$ where we have:$$
+i = \{0, 0.25, 0.5, 1\} \\
+j = \{0, 0.25, 0.5, 1\} \\
+k = \{1 \ldots5\} \\
+l = \{1 \ldots n_k\}
+$$ With this model, we have a few constraints,$\sum_i n_i\alpha_i = 0$,
+$\sum_j n_j\beta_j = 0$, $\sum_{ij} n_{ij}\alpha\beta_{ij} = 0$,
+$\gamma \sim N(0, \sigma_{\gamma}^2)$, and
+$\epsilon \sim N(0,\sigma^2)$. With fixed effects of both the left and
+right contrasts, we aim to find how they affect the mean firing rate for
+all neurons. However, because we are comparing these neuron mean firing
+rates across multiple sessions, we must include a random effect measure
+to account for all non-fixed effects that take place in switching
+sessions. This random effect, as well as our error, are both normally
+distributed.
+
+We now build our model, using **lme4** library, which will allow us to
+create the intercept $\gamma_k$ for each session in the model. Since we
+will be performing model comparisons between fixed effects, we will
+abstain from using the restricted maximum likelihood estimation (Oehlert
+4). We first build a full model, as described above, where we receive
+the following summary below.
+
+```{r, fig.height = 6}
+lm1 = lmer(Firing.Rate ~ C.Left * C.Right + (1 |Session),
+           data = mice,
+           REML = F)
+
+# plot(lm1) save for sensitivity analysis
+sum.lm1 <- summary(lm1)
+kable(sum.lm1$coefficients)
+
+#ranef(lm1)
+#predict(lm1, )
+```
+
+From the summary, we can see from our fixed effects that as contrasts
+levels increase, the estimated mean firing rate increases. However, when
+we hold interactions between the left and right contrasts, the estimates
+lower, with all interactions being negative. We test for significance at
+$\alpha = 0.05$ using the likelihood ratio test between our full
+interaction model and a no interaction model. In doing so, we calculate
+a p-value of 0.041, leading us to reject $H_0$, that there is no
+difference between the models, therefore, we continue to use the full
+model.
+
+```{r}
+# Now build a model with no interactions 
+lm2 = lmer(Firing.Rate ~ C.Left + C.Right + (1 |Session),
+           data = mice,
+           REML = F)
+#summary(lm2)
+
+#anova(lm1, lm2)
+# From the likelihood ratio test we can see that with a p-value of 0.05, we reject the null, that there is no difference in the models, therefore we keep the full model 
+```
+
+Since we have evidence that our model is improved with interactions, we
+seek to evaluate the random effects and their significance. To visualize
+how our random effect Session influences our model, we will use a three
+dimensional scatter plot to show our predictions of mean spike rate with
+all permutations of combinations with our factor effects contrast left
+and contrast right as well as the interaction.
+
+```{r}
+### PERTAINING TO THE RANDOM EFFECT TESTING 
+# The 3d Scatter will help visualize the difference between the random effects
+
+# Set up data by predictions for 3d Scatter (not including heatmap, not as useful)
+pred.mice <-
+  expand.grid(x = unique(mice$C.Left), y = unique(mice$C.Right)) # All permutations of contrasts
+pred.mice <- pred.mice %>% slice(rep(row_number(), 5))
+pred.mice <-
+  cbind(pred.mice, c(sapply(1:5, function (x)
+    rep(x, 16)))) # combine with session numbers
+colnames(pred.mice) <- c("C.Left", "C.Right", "Session")
+pred.mice <-
+  pred.mice %>% mutate_if(is.numeric, as.factor) # convert to factors
+pred.mice <-
+  cbind(pred.mice, predict(lm1, pred.mice)) # add predictions to df
+colnames(pred.mice) <-
+  c("C.Left", "C.Right", "Session", "Pred")  # add column names
+# ggplotly(ggplot(pred.mice, aes(
+#   x = C.Left, y = C.Right, fill = Pred
+# )) + geom_tile() + facet_wrap( ~ Session, ncol = 2))
+
+# Lets try with plotly scatter
+l <- list(
+  font = list(
+    family = "sans-serif",
+    size = 12,
+    color = "#000"
+  ),
+  bgcolor = "#E2E2E2",
+  bordercolor = "#FFFFFF",
+  borderwidth = 2
+)
+plot_ly(
+  x = pred.mice$C.Left,
+  y = pred.mice$C.Right,
+  z = pred.mice$Pred,
+  type = "scatter3d",
+  mode = "markers",
+  color = pred.mice$Session
+) %>% layout(
+  scene = list(
+    xaxis = list(title = "Left Contrast"),
+    yaxis = list(title = "Right Contrast"),
+    zaxis = list(title = "Mean Firing Rate")
+  ),
+  legend = list(title = list(text = '<b> Session </b>'))
+) %>% layout(legend = l)
+
+
+# Test for model with no random effect
+lm.noRando <- lm(Firing.Rate ~ C.Left * C.Right,
+           data = mice)
+#anova(lm.noRando)
+
+# Likelihood ratio test 
+#anova(lm1, lm.noRando)
+
+# Random effect has very small p-value, so we also reject and continue with our full mixed effect model
+```
+
+In this plot, we have the left and right contrasts on the x and y axis
+respectively, and the mean firing rate plotted on the z axis. From here,
+we can see all the possible predictions our model can make given a left
+and right contrast from neurons. Looking at the sessions together, we
+can see our there are noticeable differences in height along the z axis
+between sessions, much like what we observed in our histogram in the
+descriptive analysis earlier. The largest difference is noticeable
+between sessions two and four, with four and five's distance not far
+behind. The two closest sessions are session three and two, with three
+having slightly higher predictions.
+
+These differences and similarities logically make sense. Session two and
+three are the same mouse, Cori, and are one day apart. Session four and
+five's noticeable difference could be due that these sessions measured
+the optic neurons of a completely different mouse, Forssmann. While
+these differences are noticeable in their predictions from our model
+visually, we must ask if they are statistically significant. To answer
+this, we perform one more Likelihood Ratio Test, this time between our
+original full mixed effect model and a model with no random effect for
+session. In doing so, we are given a p-value very close to zero, leading
+us to reject $H_0$ at any reasonable significance level $\alpha$. We can
+conclude the random effects model is our best choice, and that there are
+significant differences between sessions.
+
+We continue on to evalue the performance of this model in **Sensitivity
+Analysis**.
+
+# Sensitivity Analysis
+
+## Outliers
+
+Before checking the assumptions of normality and homoscedasticity for
+our final model, we first check for outlying points. We search for these
+outlying points by observing the Cook's distance for each point, as well
+as the size of the residuals. From the first plot below, we can see that
+observations 3, 10, and 806 have the largest Cook's distance. Our plot
+of residuals shows us another observation that stands out, neuron 44.
+
+```{r}
+# Before checking Normality and Homoscedasticity, lets check for outliers
+cookD.lm1 <- cooks.distance(lm1)
+row.ind <- seq(1, nrow(mice), 1)
+ggplotly(
+  ggplot() + aes(x = row.ind, y = cookD.lm1) + geom_point() + labs(y = "Cooks Distance", x = "Observation Number", title = "Plot of Cooks Distance vs Observation Number for Mixed Effect Model")
+)
+
+ggplotly(
+  ggplot() + aes(x = row.ind, y = sum.lm1$residuals) + geom_point() + labs(y = "Cooks Distance", x = "Observation Number", title = "Plot of Residuals vs Observation Number for Mixed Effect Model")
+)
+```
+
+After identifying these outstanding neurons and their firing rates, we
+can search for what makes them stand out. Observations 3, 10, and 44 are
+from Session 1, the mouse Cori, all having a much higher firing rate
+than the average for that session, which was around 4. Observation 806
+has an abnormally high firing rate for the left and right contrast it
+has in its session, the predicted value for a left contrast of 0.25 and
+right contrast 0 is 2.183. Here, observation 806 has an observed 3.85
+firing rate. Due to the abnormality of these outliers, we will remove
+them and rebuild the model to assess further assumptions.
+
+```{r}
+# From the plot we can see that observations 10, 806, and 3 have the highest Cook's distance, lets see what stands out
+# 44 has the largest residual value 
+mice[c(3,10,44, 806),]
+
+# Observation 10 has a firing rate of 6.66, when the average firing rate is around 4, Observation 3 is also a session 1 with a high firing rate, however it is not as drastic as observation 10
+# 44 is an extremely high mean firing rate for session 1
+# Observation 806 has an abnormally high firing rate for the left and right contrast it has in its session, the predicted value for a cleft 0.25 and cright 0 is 2.183 where observation 806 is 3.85 firing rate
+
+# We will remove these rows, rebuild the model, and check assumptions
+mice.red <-  mice%>%
+  filter(!row_number() %in% c(3, 10,44, 806))
+
+# build model with outliers removed
+lm1.red = lmer(Firing.Rate ~ C.Left * C.Right + (1 |Session),
+           data = mice.red,
+           REML = F)
+sum.lm1.red <- summary(lm1.red)
+# Continue with sensitivity analysis
+```
+
+## Normality
+
+We first check the normality of our residuals, as plotted in the
+histogram below. We can see that there is not a huge stray from
+normality, however there is a right skew in the residuals. We can
+confirm this deviation from our normality with a formal Shapiro-Wilk's
+test, the hypothesis stated below, which gives us a p-value of $3.287 * 10^{-7}$, thus leading us to
+reject the null hypothesis that this data comes from a normal
+population. However, since the ANOVA model is robust against minor
+deviations in normality, we will continue with our model and check our
+homoscedasticity condition.
+
+$$
+H_0: \text{The data comes from a normal population} \\
+H_a: \text{The data does not come from a normal population}
+$$
+
+```{r, warning = F}
+# Plot a histogram of the residuals 
+ggplotly(
+  ggplot() + aes(x = sum.lm1.red$residuals) + geom_histogram(aes(y = ..density..), bins = 20, fill = "#E69F00") + geom_density() +  theme_igray() + labs(x = "Pearson Residuals", y = "Count", title = "Distribution of Residuals for Full Mixed Effect Model")
+)
+
+# Shapiro.test
+#shapiro.test(sum.lm1.red$residuals)
+```
+
+## Homoscedasticity
+
+We plot our fitted values versus our residuals, with the addition of a
+smoothing spline, to ensure we do not miss non-obvious patterns. Our
+smoothing spline shows no non-linear patterns, with the spline not
+deviation from the $x = 0$ line. We confirm with a Brown-Forsythe test,
+an extension of the Levene test, but using the median instead of the
+mean. We test the following hypothesis:
+$$
+H_0: \text{The variances are equal across cells} \\
+H_a: \text{The variances are not equal across cells}
+$$
+In doing so, we get a p-value of $0.412$, concluding that our
+equal variance assumption is met.
+
+```{r, warning = F}
+ggplotly(
+  ggplot() + aes(x = predict(lm1.red), y = sum.lm1.red$residuals) + geom_point() + theme_igray() + stat_spline(
+    spar = 0.95,
+    size = 0.8,
+    color = "#cd534cff"
+  ) + labs(x = "Fitted Values", y = "Pearson Residuals", title = "Pearson Residuals vs. Fitted Values for the Final Model")
+)
+
+#head(mice.red)
+#leveneTest(Firing.Rate ~ C.Left*C.Right, data = mice.red)
+
+# We can see from our Levene Test and the fitted values vs residuals the assumption is met
+```
+
+Our final interpretation of the mode will be discussed at the end of
+this report. Now however, we deviate towards a new goal, predicting the
+outcome of each trial.
+
+# Predictive Modeling
+
+## Building the Model: Logistic Regression
+
+As discussed in the background section, both mice at the end of every
+trial was given one of two feedback types, a reward, 1, or a penalty,
+-1. Our goal now is to use our information regarding each trial to
+predict to the best of our ability the Feedback Type for each trial.
+Since this outcome is binary, we opt for logistic regression approach.
+We first split the data, where we will isolate the first 100 rows as
+test data, and the remaining rows as training data.
+
+We begin with an initial model, similar to our ANOVA, contrast left and
+right as well as their interaction, the session, and the firing rate all
+serve as predictors. After building the model, we perform a backwards
+stepwise regression using AIC as the penalty, since we are looking for
+predictive ability. This process returns our full model, as we can see
+in the summary below. However, given the presence of multiple
+non-significant interactions, we will continue on without interactions
+so that our model is more interpretable.
+
+```{r}
+# We are interested in positve outcome being 1 (not negative 1), so we relevel
+# str(mice$Feedback_Type)
+# mice$Feedback_Type <- relevel(mice$Feedback_Type, ref = "1")
+# str(mice$Feedback_Type)
+# This is producing errors 
+
+
+
+# We now focus on building a logistic regression model for Feedback type, we will start with full data, and subset to train and testing
+mice.test <- mice[1:100,]
+mice.train <- mice[101:1196,]
+
+mice.logit <-
+  glm(Feedback_Type ~ C.Left * C.Right + Session + Firing.Rate,
+      data = mice.train,
+      family = "binomial")
+#summary(mice.logit)
+#kable(summary(mice.logit)$coefficients)
+
+library(MASS)
+mice.step <- stepAIC(mice.logit, trace = F)
+kable(summary(mice.logit)$coefficients)
+```
+
+Since we have multiple factors, one of our goals is to increase the
+degrees of freedom by lowering the levels of factors in the data. While
+the approach for re-encoding might not seem obvious right away for
+contrasts or their interactions, one does become quite obvious, Session.
+We can see Session 4 and 5 are highly significant based on asymptotic
+normality, where Session 2 and 3 (1 is the baseline) are not as
+significant if at all. We can instead re-encode this variable to be by
+which mouse are we observing, Cori or Forssmann. We do this and rebuild
+the model, to which our output is reduced model with a highly
+significant new Session variable.
+
+```{r}
+# Re-encoding Session 
+mice.train <-
+  mice.train %>% mutate(Session = fct_collapse(
+    Session,
+    "Cori" = c("1",
+               "2",
+               "3"),
+    "Forssmann" = c("4", "5")
+  ))
+
+# Do for test data as well
+mice.test <-
+  mice.test %>% mutate(Session = fct_collapse(
+    Session,
+    "Cori" = c("1",
+               "2",
+               "3"),
+    "Forssmann" = c("4", "5")
+  ))
+
+
+mice.logit2 <-
+  glm(Feedback_Type ~ C.Left + C.Right + Session + Firing.Rate,
+      data = mice.train,
+      family = "binomial")
+kable(summary(mice.logit2)$coefficients)
+
+#summary(mice.logit2)
+```
+
+## Expanding the Model: Generalized Partially Linear Additive Model (GPLAM) and Mixed Effect GLM
+
+Outside of our contrasts and Session variable, there is one variable
+which we have not has a chance to look at, Firing Rate. The asymptotic
+normality of this variable tells us it is highly significant as a linear
+effect. However, we are curious if the relationship of firing rate is
+better as a non-linear predictor. Thus, we look towards the Generalized
+Additive Model (GAM), or in our case the GPLAM, since we only have one
+continuous predictor.
+
+When performing a smoothing spline with 1 degree of freedom on the mean
+firing rate, non-parametric ANOVA shows high significance. However,
+higher order smoothing splines such as quadratic or cubic are not as
+significant, with p-value $\approx 0.07$. Due to this, we will abandon
+the GPLAM model and conclude the mean firing rate is best as a linear
+predictor.
+
+```{r}
+model.gam2<-
+  gam(
+   Feedback_Type ~ C.Left + C.Right + Session + s(Firing.Rate, 1),
+    family = "binomial",
+    data = mice.train
+  )
+#summary(model.gam2)
+#plot(model.gam2)
+#plot(mice.train$Firing.Rate, model.gam2$smooth.frame)
+
+# #Building a more significant
+# model.gam3<-
+#   gam(
+#    Feedback_Type ~ C.Right + s(Firing.Rate, 1) + C.Left : C.Right,
+#     family = "binomial",
+#     data = mice.train
+#   )
+# summary(model.gam3)
+```
+
+We approach our predictive modeling with a more familiar type of model,
+instead of holding the session as a fixed effect, we hold it as a random
+effect as we appropriately modeled for our mixed effects ANOVA model. To
+do this, we build a mixed effects logistic regression model, using the
+**lme4** package once more.
+
+```{r}
+mice.glmer <- glmer(Feedback_Type ~ C.Left + C.Right + (1|Session) + Firing.Rate,
+      data = mice.train,
+      family = "binomial")
+#summary(mice.glmer)
+```
+
+## Testing the Classification
+
+In our classification, we test two models, a generalized linear model
+using only fixed effects and a mixed effects GLM. In comparing the
+accuracy of classification for both models, we are returned the exact
+same accuracy for both models, 0.77. Below is the confusion matrix for
+both models (same outcome). We can see that the models are able to
+predict a reward feedback type quite often, however our model tends to
+over predict for feed back types being rewards, as we can see from the
+large amounts of false positives, more than double the amount of true
+positives.
+
+Specifically, we have a specificity of $\frac{7}{11} = 0.64$ and a
+sensitivity of $\frac{70}{89} = 0.79$. This high sensitivity reflects
+our ability to strong predict a positive outcome, however the lower
+specificity reflects our lack of ability to predict penalty outcomes as
+well as rewards.
+
+```{r}
+mice.predict.logit <- as.factor(ifelse(predict(mice.logit2, mice.test) > 0.5, 1, -1))
+CM.logit <-confusionMatrix(data = mice.test$Feedback_Type, mice.predict.logit)
+kable(CM.logit$table)
+#CM.logit
+
+# GPLAM, # NOT USEFUL
+# mice.predict.gam <- as.factor(ifelse(predict(model.gam2, mice.test) > 0.5, 1, -1))
+# CM.gam <- confusionMatrix(data = mice.test$Feedback_Type, mice.predict.gam)
+# CM.gam
+
+# Mixed Effects
+mice.predict.glmer <- as.factor(ifelse(predict(mice.glmer, mice.test) > 0.5, 1, -1))
+CM.glmer <- confusionMatrix(data = mice.test$Feedback_Type, mice.predict.glmer)
+#kable(CM.glmer$table)
+#CM.glmer
+```
+
+We have our final model as $$
+logit(E(Y_{Fdbk}| X)) = -1.49 - 0.24X_{CL=0.25} - 0.44X_{CL=0.5} - 0.22X_{CL=1} - 0.99_{CR=0.25} \\ - 0.90X_{CR=0.5} - 0.85X_{CR=1} + 1.57X_{Session} + 0.78X_{FireRate}
+$$
+
+## Assessing Fit
+
+```{r, warning = F}
+# Since the data is ordered and does not have random order, we need to shuffle, that way Run's test does not detect systematic pattern
+set.seed(123) # For results to stay consistent
+mice.train.shuffle <- dplyr::slice(mice.train, sample(1:n()))
+
+mice.logit2.shuffle <-
+  glm(Feedback_Type ~ C.Left * C.Right + Session + Firing.Rate,
+      data = mice.train.shuffle,
+      family = "binomial")
+
+res.D.shuffle = residuals(mice.logit2.shuffle, type="deviance") 
+#res.D = residuals(mice.logit2, type="deviance") 
+
+ggplotly(
+  ggplot() + aes(x = mice.logit2.shuffle$fitted.values, y = res.D.shuffle) + geom_point() + theme_igray() + stat_spline(
+    spar = 1.1,
+    size = 0.8,
+    color = "#cd534cff"
+  ) + labs(x = "Fitted Values", y = "Deviance Residuals", title = "Deviances Residuals vs. Fitted Values for the Final Model")
+)
+
+#runs.test(res.D.shuffle, plot.it = F)
+```
+
+We briefly want to asses model fit for the predictive modeling as well.
+Since the fixed effects GLM predicted the same as the mixed effects GLM,
+we will check diagnostic of the prior. We can see from the deviance
+residuals, with the addition of the smoothing spline, the residuals tend
+around the zero-line. However, we can also perform a Runs test to ensure
+there is no systematic pattern in the residuals. In order to do this
+though, we must shuffle the data, as the Runs test will detect the data
+being ordered by session and give us a misleading result. After
+shuffling and performing the test, which returns us a p-value of 0.5865,
+we conclude the fitted values versus the residuals are random with no
+systematic pattern, indicating a good fit.
+
+# Discussion
+
+We first discuss our mixed-effect, two-way ANOVA model for the mean
+firing rates of neurons. From Likelihood Ratio tests, we were able to
+conclude the full model, one with fixed effects, interactions, and
+random effects was our best model of choice in modeling the mean firing
+rate of neurons in the visual cortex of mice Cori and Forssman. From the
+coefficients, we can see however the contrast on the right, has a larger
+effect overall than the left counter apart on mean firing rate.
+Interestingly, our interactions between these contrasts are all negative
+coefficients in predicting the mean firing rate. Our main effects
+measure the individual effects they have on the mean firing rate, while
+the interactions show that when these contrasts are combined, they
+adjust the predictions by lowering. We can see when interactions with
+the right contrast equaling 1 tend to have less of an effect on lowering
+the mean firing rate then vice versa.
+
+Like the interactions, the random effect in this model is significant as
+well. Recalling the 3D scatter plot earlier with our model predictions,
+there is a significant difference between sessions and the measure of
+mean firing rates within them. However,the plot as well as predictive
+modeling suggests that the difference is not so much within different
+sessions but within the two mice. Recall that in the scatter plot
+between sessions 1, 2, and 3 and sessions 4 and 5 there was a large gap.
+This logically makes sense as these sets of sessions correspond to
+different mice. It would seem that Forssmann has lower mean spike rates
+on average compared to Cori.
+
+In predicting the feedback type with our data, we opted for logistic
+regression for the binary response. Our re-encoding of session into
+which mouse (as logically mentioned in the previous paragraph),
+simplified our model and increased the significance of predictors. We
+took this simplified model and attempted both a GPLAM and mixed effects
+model approach. However, in the end, these models came up either
+inconclusive or matched the predictive ability of a standard generalized
+linear model with no random effects, resulting in a final accuracy of
+0.77 in our prediction ability.
+
+There are some caveats in our results to discuss as well. In our
+sensitivity analysis, while we found homoscedasticity assumption to be
+met for our ANOVA model, our normality assumption was not met. We can
+conclude, as mentioned, the robustness of the model against slight
+departures in normality ensures our model is still appropriate. However,
+it might be beneficial in the future to either take a non-parametric
+approach or to collect more data in hopes that our normality assumption
+is met.
+
+While our logistic regression has a predictive accuracy of 0.77, our
+test data required for this report is not an optimal choice. We are
+systematically sampling the first 100 rows of the data, which is all
+from 1 session, rather than diversifying the test data to better reflect
+the entire data as a whole. Along with this, the test data's feedback
+type is largely imbalanced, with 74 rewards and 26 penalties, which is
+also affecting the prediction outcomes. A better approach would be to
+control for balancing the feedback type equally as well as diversifying
+the data amongst sessions.
+
+# Acknowledgement {.unnumbered}
+
+I would like to acknowledge Niraj Bangari, Kate Jones, Jonas Kempf, and Christopher Li in their discussion and assistance in approach of analysis and debugging for this report. I would also like to thank Jing Lyu, who provided assisting code and guiacne for performing logistic regression prediction diagnostics
+
+# Reference {.unnumbered}
+
+Oehlert, Gary W. A Few Words about REML . 18 Oct. 2011, http://users.stat.umn.edu/~gary/classes/5303/handouts/REML.pdf. Presented for Stat 5303
+
+
+# Session info {.unnumbered}
+
+
+```{r}
+sessionInfo()
+```

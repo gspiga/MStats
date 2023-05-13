@@ -1,0 +1,378 @@
+---
+title: "An Analysis of Class Size for Project STAR"
+author: "Gianni Spiga"
+date: "17 February 2023"
+output:
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    number_sections: yes
+    theme: flatly
+    code_folding: hide
+---
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'H')
+```
+
+# Abstract 
+
+In this report, we explore the effect of project STAR, Tennessee's study of class size for elementary school students. Visualizations of students scores and a comaparison of averages sets the path for a two-way ANOVA model for 1st grader scores with factor effects class size and school ID. Model reduction and data cleaning take place, as well as checking assumptions and outliers. The analysis results find that smaller class sizes do help significantly increase 1st graders math scores in Tennessee, as well as the school they attend. A teacher aide present in the class room seems to show no significant difference. We end with a discussion on where improvements would be beneficial for future analysis. 
+
+# Introduction 
+
+The education of an individual is one of the most important qualities, often being the determinant of a persons contribution to a society. As a country, we should always seek to improve the quality of our education, especially as misinformation spreads violently. Project STAR seeked to improve the quality of education for elementary students in Tennessee. In this report, we explore how we can improve the quality of math scores of 1st graders, specifically looking at the class size and the teacher attended, with the average score by teacher as the unit. Our data is provided from the Harvard Dataverse.  
+ 
+# Background 
+
+Project STAR, an acronym for "Student-Teacher Achievement Ratio, was the first of the three-phase Tennessee class size project. The introductory phase, which began in 1985 and extended to 1989, tested the effect of three class sizes among children from first grade to fourth grade. STAR's inspiration stemmed from a similar study done in a few states away in 1981. Indiana's project "Prime Time" was a two year study of the grades Kindergarten through 3rd, finding that students in smaller class sizes had higher achievement. Despite the results from the nearby state, STAR's mission was to prove that smaller class sizes would benefit in their own states. This way, lawmakers' question of funding such an expansion of the education system being worthwhile would be answered. 
+
+The study took place over four years. Schools, who had a mandatory sign up for the period, had to have no less than 57 students for each grade. This number was required so that the grades could be required into class type 1, made up of 13 - 17 students, and type 2 and 3, which both had classes of 22 - 25 students. The difference between the two being the latter has a teacher aide while the former does not. The teacher aid did not have any instruction outside of supporting the teacher in whichever way was desired. 
+
+The dataset for this analysis is provided by the Harvard Dataverse. For the purpose of this analysis, the data will be reduced to the ID of each school, teacher, the class type, and the score of the mathematics examination for first graders. 
+
+# Descriptive analysis 
+
+````{r, echo = F, message = F}
+library(dplyr)
+library(knitr)
+library(haven)
+library(ggplot2)
+library(plotly)
+library(car) # for imbalanced ANOVA
+```
+On initial loading of the data, we find that there is 5,003 rows with missing data, many of those rows missing all the information needed for our analysis. After omitting these rows, we are left with 6,598 students with 339 teachers spanning from 76 schools.  
+
+```{r, message = F, warning = F}
+# Using Harvard database
+star <- read_sav("STAR_Students.sav")
+# star # 11,601 
+star <-
+  star %>% dplyr::select(g1tmathss, g1classtype, g1schid, g1tchid) %>% na.omit()
+
+star[,2:4] <- star[,2:4] %>% mutate_if(is.double, as.factor)
+star
+```
+```{r, include = F}
+# 6,598 rows 
+# How many students does each teacher have 
+#table(star$g1tchid)
+
+# How many students does each school have
+#table(star$g1schid)
+
+# How many teachers at each school 
+#table(star$g1schid, star$g1tchid)
+
+#star[order(star$g1tchid),]
+
+# Class type is a fixed effect, they are non random 
+```
+For this analysis, we will perform ANOVA on a scaled down version of our original dataset. We reduce our original data set to just grade 1 teachers, schools, class type, and  math scores, coded as *g1tchid*, *g1schid*, *g1classtype*, and *g1mathss* respectively. Along with this column reduction, we also remove all rows that contain any missing values post variable selection. When we perform said transformation on the data, we now only consider the 4 mentioned predictors with 6,598 observations of classes. Below we will visualize the data to gather insight for our analysis. 
+
+## Visualizing the Entire Data
+
+We first begin with visualizing the math scores by class type. We can see that the median score for class type 1, those with 13-17 students, is the highest, followed by class type 3, 22-25 students with a teaching aide. The first and third quantiles are also higher in value for class type 1 than the other two class types. Again, class type 2 is the lowest. A histogram of the three class types distributions shows us that all three class types are all roughly normal, with some outliers present. 
+
+
+```{r, echo = F}
+# Visualization 
+#ggplot(star, aes(x = g1tmathss)) + geom_boxplot() + labs(x = "Score", title = "Boxplot of Math Scores")
+
+ggplot(star, aes(x = g1tmathss, fill = g1classtype)) + geom_boxplot() + labs(x = "Score", title = "Score vs. Class Type")
+
+ggplotly(
+  ggplot(star, aes(x = g1tmathss, fill = g1classtype)) + geom_histogram(alpha = 0.8, bins = 25) + labs(title = "Histogram of Scores Grouped by Class Type")
+) #, position = "identity")
+```
+
+## Visualizing Summary Statistics
+
+```{r, message = F}
+# We gather the mean of each combination of school id and teacher id
+star.sum <-
+  star %>% group_by(g1classtype, g1schid, g1tchid) %>% summarise(
+    mean = mean(g1tmathss),
+    std.dev = sd(g1tmathss),
+    median = median(g1tmathss)
+  )
+#kable(head(star.sum, 10))
+star.sum
+
+# Visualize the distribution of means of scores 
+ggplotly(ggplot(star.sum, aes(x = mean)) + geom_histogram(bins = 19, fill = "#CC0000") + labs(x = "Mean", title = "Distribution of Means Grouped by Teacher and School ID"))
+
+# Visualize the distribution of medians of scores
+ggplotly(ggplot(star.sum, aes(x = median)) + geom_histogram(bins = 19, fill = "#CC0000") + labs(x = "Median", title = "Distribution of Medians Grouped by Teacher and School ID"))
+```
+
+In both the distributions of the mean and median, there is a slight right skew as there are heavier tails left of the center. These could be due to outliers. This slight skew is not cause for concern, as our ANOVA test is robust against slight departures from normality. Below is our scatter plots that show the average for each school ID and class type, which look quite similar. 
+
+```{r, echo = F}
+# Create a summary for schools and plot
+ggplotly(
+  ggplot(star.sum, aes(
+    x = as.numeric(g1schid),
+    y = mean,
+    color = g1classtype
+  )) + geom_point() + labs(x = "School ID", y = "Mean", title = "Scatter Plot of Mean Average Score")
+)
+
+ggplotly(
+  ggplot(star.sum, aes(
+    x = as.numeric(g1schid),
+    y = median,
+    color = g1classtype
+  )) + geom_point() + labs(x = "School ID", y = "Median", title = "Scatter Plot of Median Average Score")
+)
+
+# We group by means of teachers thus making samples for schools
+star.sum.sch <-
+  star %>% group_by(g1tchid) %>% summarise(
+    mean = mean(g1tmathss),
+    std.dev = sd(g1tmathss),
+    median = median(g1tmathss), 
+    g1schid = unique(g1schid),
+    g1classtype = unique(g1classtype)
+  )
+```
+
+```{r, echo = F}
+# Schools 244728, 244736, 244796,244839
+#table(star.sum.sch$g1schid)
+
+# lets view the scores of these schools and see if they stand out
+# filter(star.sum.sch, g1schid == "244728" |  g1schid  =="244736" | g1schid  =="244796" | g1schid  == "244839")
+
+# star.sum.sch <-
+#   star.sum.sch %>% filter(.,
+#                           g1schid != "244728" &
+#                             g1schid  != "244736" & g1schid  != "244796" &
+#                             g1schid  != "244839")
+# length(unique(star.sum.sch$g1schid))
+# 
+# star.sum.sch %>% filter(.,
+#                           g1schid == 244728 |
+#                             g1schid  == 244736 | g1schid  == "244796" |
+#                             g1schid  == "244839")
+# star.sch.red <- star.sum.sch[!(
+#   star.sum.sch$g1schid == 244728 |
+#     star.sum.sch$g1schid  == 244736 |
+#     star.sum.sch$g1schid  == 244796 | star.sum.sch$g1schid  == 244839
+# ), ]
+
+#table(star.sch.red$g1classtype)
+#unique(star.sch.red$g1schid)
+#[star.sch.red$g1schid == "244736",]
+```
+
+
+From our descriptive analysis, we can gather that both the mean and median are similar in how they are distributed. However, due to the slight departure from Normality, we will build our ANOVA model with the median as our summary statistic, this way our analysis will be performed on a more accurate measure of center for the scores. We now move on to our inferential analysis, where we first identify our $n_i$'s, and an issue we must adjust for. 
+
+# Inferential analysis 
+
+## Building the Model
+
+We now perform a two-way anova on class type and school ID, to find if there is a significant difference among classes in schools. Our two way ANOVA model is the following: 
+$$
+Y_{ijk} = \mu_{..} + \alpha_{i} + \beta_{j} + \epsilon_{ijk}
+$$
+If we decide to include interactions, than we have the following model: 
+
+$$
+Y_{ijk} = \mu_{..} + \alpha_{i} + \beta_{j} + (\alpha\beta)_{ij} + \epsilon_{ijk}
+$$
+where $k=1,\ldots, 339, j=1, \ldots, 76, i=1,\ldots, 3$.
+
+For the ANOVA model, we also assume that our observations are normally distributed as well as they have equal variance amongst cells. These conditions will be checked in detail in the section **Sensitivity Analysis**. 
+
+Before we can state our constraints and build our model, we must first decide whether our data is imbalanced or balanced. We output a table of the number of observations for each class type, noticing that each class type has a different sample size, with class type 1 having the highest amount at 124 observations and type 3 the lowest at 100 observations. Due to this we will perform an unbalanced ANOVA. 
+
+We now have the constraints that:
+$$
+\begin{align}
+\sum_i w_i\alpha_i & = \sum_j w_i\beta_j=0\\
+\sum_{i=1}^a w_i(\alpha\beta)_{ij} & =\sum_{j=1}^b w_j(\alpha\beta)_{ij} =0, \ \forall i,j
+\end{align}
+$$
+where $w$ is the vector of weights for our imbalanced ANOVA. 
+```{r, echo = F}
+# check if we have balanced data
+kable(table(star.sum.sch$g1classtype))
+```
+
+## Model Comparisons and Finding Significant Differences
+
+We use the library **car** to build our imbalanced ANOVA, as well as comparing a model with interactions to one with no interactions. Below we output a summary with a full model and reduced model. 
+
+```{r, echo = F, message = F}
+### NOT USING MEAN MODEL
+# We find interaction to be non significant
+# fullmod <-
+#   anova(aov(mean ~ g1classtype * g1schid, data = star.sum.sch))
+# fullmod
+
+# Fit no interaction model
+# redmod <-
+#   aov(mean ~ g1classtype + g1schid, data = star.sum.sch)
+# redmod$residuals
+```
+```{r}
+### Median Model 
+# Model for the median, with interaction
+fullmod.med <-
+  aov(median ~ g1classtype * g1schid, data = star.sum.sch)
+kable(Anova(fullmod.med))
+
+# Since we have unbalanced data, we will use a type II ANOVA
+# Model without Interaction
+redmod.med <-
+  aov(median ~ g1classtype + g1schid, data = star.sum.sch)
+kable(Anova(redmod.med))
+```
+
+For any factor effect $\gamma_i$, we test the following hypothesis:
+$$
+H_0: \gamma_i = 0, \forall  \ i \\
+H_a: \text{At least one} \ \gamma_i \neq 0
+$$
+All statistical tests in the analysis will be evaluated at a significance level of $\alpha = 0.05$. 
+
+We can see from our interaction model that our **F-test** for the interaction term is not significant, leading us to conclude that an interaction term is not needed in our model. We fail to reject the null hypothesis and conclude that $(\alpha\beta)_{ij}=0, \forall i, j$  We will continue with the rest of the report using a non-interaction model.
+
+In our reduced model, we can see that our F test for our main factor effects $\alpha$ and $\beta$, corresponding to our class type and school ID are both highly significant, leading us to conclude that neither all $\alpha_i$'s or $\beta_j$'s are equal to zero. Now that we have established via an F test significant differences among cells, we need to find where these differences lie. These differences can be found using Tukey's Honestly Significant Difference technique. 
+
+```{r}
+tukey <- TukeyHSD(redmod.med, which = "g1classtype")
+plot(tukey, col = "#002D65")
+```
+
+From Tukey's HSD, we can see that class type 1 is significantly different from class type 2 and 3. We are 95% confident that the true difference in scores between class type 1 and 2 is in the interval $[7.148, 17.924]$ and the difference between type 1 and 3 is in $[5.258,16.445]$. We also can state our confidence that the true difference between types 2 and 3 are between $[-4.006, 7.374]$, giving us a non-significant differnce since our interval contains zero. Tukey HSD gives us 95% confidence intervals for the difference in score between the two groups, for which both of the significant differences imply students in smaller class sizes perform better than students in regular class sizes, regardless if there is a teacher aid present or not. 
+
+## Addressing Outliers
+
+Outliers have the ability to hurt a models ability to return accurate inference, as well as hurt assumptions such as normality. We look at a residuals versus leverage plot to observe which points stand out in our model. Below, we notice that observations 53, 143, and 144 have the highest Cook's distance.  
+
+```{r}
+# Outlier removal
+plot(redmod.med, which = 4) # 53, 143, 144
+# outliers 253, 179, 53, 143, 144
+star.sum.sch[c(53, 143, 144),]
+```
+
+```{r, include = F}
+#mean(star.sum.sch$median)
+
+# Obs 143
+#subset(star.sum.sch, star.sum.sch$g1classtype == 2 & star.sum.sch$g1schid == "205490")
+#subset(star.sum.sch, star.sum.sch$g1schid == "205490")
+#star.sum.sch[c(53,61, 143, 144, 179, 253),]
+
+# Outliers are mostly class type 1, who had a very high score, Obs 143 is class type 2, who had a higher than average score 
+```
+
+Observation 53 is a score from class type 1 that scored high above the average median, 530.64, in fact the highest of all scores. Observation 143 and 144 are both from school 205490, where the former is a type 2 with a higher median than most others in class type 2 and the latter is a below average score for type 1. We remove these outliers and build our final model.  
+
+```{r, echo = F}
+# Remove these points
+star.red <- star.sum.sch[-c(53, 143, 144),]
+
+#
+final.mod <-
+  aov(median ~ g1classtype + g1schid, data = star.red)
+kable(Anova(final.mod))
+
+#leveneTest(median ~ g1classtype * g1schid, data = star.red)
+#plot(mod.med.red)
+```
+
+The fact there was no significant change should be no surprise. However, these influential points like these could be an obstacle when checking assumptions. Our final model continues to show that both class type and school ID are highly significant. We now move to our sensitivity analysis, where we can validate if the assumptions of our model are met. 
+
+</span> 
+
+# Sensitivity analysis 
+
+## Normality
+
+Sensitivity analysis for the ANOVA model requires two major assumptions, normality of residuals and homoscedasiticy. We check normality with a normal QQ-plot as well as a formal test, in this case, Shapiro Wilks. For the test, we have the following hypothesis: 
+$$
+H_0: \text{The data comes from a normal population} \\
+H_a: \text{The data does not come from a normal population}
+$$
+
+```{r, include = F, out.width = "80%"}
+# Examine residuals
+# ggplot() + geom_qq(aes(sample = redmod)) + geom_abline(aes(slope = 1, intercept = 0))
+# 
+# ggplot(st) + geom_qq(aes(sample = redmod)) + geom_abline(aes(slope = 1, intercept = 0))
+
+# We can see some deviation from normality, given that we have heavy tails
+#plot(redmod, which= 2)
+
+# Lets check with a formal test
+#shapiro.test(redmod$residuals)
+
+# We reject, concluding that the population does not come from a normal distribution
+```
+
+We begin our process of checking normality first with a QQ-plot, which already shows approximate normality, with some slight skew in the right tail. These tails are caused mainly by a few additional outliers, which we will explore further in the last third of this section. We observe that our formal test for normality leads us to failing to reject the null hypothesis, concluding this data comes from a normal population. However, we do not have the strongest evidence to conclude normality, so we process with caution. We now move on to checking our second condition.
+
+
+```{r, warning = F, out.width = "100%"}
+# Let's explore the distribution of the median 
+plot(final.mod, which = 2) # median has much lighter tails
+
+# Shapiro.test
+shapiro.test(final.mod$residuals)
+
+# Normality is justifiable for median
+```
+
+## Homoscedasticity
+
+Checking for equal variance amongst groups will be checked with two methods, a plot of residuals versus fitted values, and a test once more. Due to our weakness in the normality assumption, we will avoid a Bartlett or Levene test, thus leaving us with the more robust Brown Forsythe test; identical to a Levene test but uses the median instead of the mean. We have the following hypothesis: 
+$$
+H_0: \text{The variances are equal across cells} \\
+H_a: \text{The variances are not equal across cells}
+$$
+
+We first observe our plot, which shows a very promising, equally dispersed scatter. The red line in the center depicts that there is no pattern in the residuals, almost tracing the $x=0$ line. We do however notice some familiar outliers from before, observations, specifically 250 and 176. For our formal test, we are primarily interested in checking for homoscedasticity among cells for class types, so we test the one way ANOVA regressing scores on class types only. Our Brown Forsythe test, tells us confirms homoscedasticity, returning a p-value much larger than $\alpha = 0.05$ at $0.8488$, leading us to fail to reject our null hypothesis. 
+```{r, out.width = "100%"}
+# Checking equal variance
+# by plot
+plot(final.mod, which = 1)
+
+# Checking with BF test, not Bartlett since we have small departures from normality
+leveneTest(median ~ g1classtype, data = star.red)
+```
+
+# Outliers and Non-Parametric Alternatives 
+
+```{r}
+star.sum.sch[c(176, 250),]
+```
+The remaining outliers that stood out was observation 176 and 250. Observation 176 was a class type 3 who was the lowest scoring in their school. Observation 250 was the highest recorded math score in their school for class types 1. Neither of these outliers are highly influential values, so we will leave them in the model. 
+
+Since our final ANOVA model met the assumptions tested for in the sensitivity analysis, we will not be exploring a non-parametric analysis for this data. 
+
+# Discussion 
+
+STAR's goal was to investigate if decreasing the class size in elementary classes would be a worthy policy to fund for the state. We have learned that the class size and the school that a 1st grader in Tennessee goes to are both significant in determining their math score. However, there is no significant interaction between the two factors. Having a class size between 13 and 17 is beneficial for 1st graders, as their math scores were significantly higher than those in class sizes 22-25, whether or not there was a teacher aide present in the class. Furthermore, having a teacher aide in the classroom actually had no benefit to the childrens math scores. This is not to dismiss the addition of a teacher aide in the classroom, since we do not have any information in this analysis on other ways of assistance one could offer to a teacher and/or students. We have seen a deduction in class size create significant results in Indian's project Prime Time as well as Tennessee's project STAR. Future research should further expand into other states, seeking to find where else class size reduction can positively effect scores. Those who perform further analysis should also seek to not lack large amounts of data, as the deduction of over 5,000 students in the data set hurts the power of our analysis. An increase in sample size may also deter violation of assumptions, as our normality assumption, though being met by our tests, was not the strongest. 
+
+# Acknowledgement {-}
+
+I would like to acknowledge Niraj Bangari, Mark Fanboym, Kate Jones, Jonas Kempf, and Christopher Li in their discussion and assistance in approach of analysis and debugging for this report. I would also like to thank Chen Qian for his assistance in formulating the correct model for the analysis. Finally I would like to thank Jing Lyu, who provided assisting code for loading and subsetting the data set. 
+
+# Reference {-}
+
+C.M. Achilles; Helen Pate Bain; Fred Bellott; Jayne Boyd-Zaharias; Jeremy Finn; John Folger; John Johnston; Elizabeth Word, 2008, "Tennessee's Student Teacher Achievement Ratio (STAR) project", https://doi.org/10.7910/DVN/SIWH9F, Harvard Dataverse, V1, UNF:3:Ji2Q+9HCCZAbw3csOdMNdA== [fileUNF]
+
+McGiverin, J., Gilman, D., & Tillitski, C. (1989). A Meta-Analysis of the Relation between Class Size and Achievement. The Elementary School Journal, 90(1), 47–56. http://www.jstor.org/stable/1001855
+
+Mosteller, Frederick. The Tennessee Study of Class Size in the Early School Grades. https://www.edsource.org/wp-content/uploads/old/STAR.pdf. 
+
+# Session info {-}
+
+```{r}
+sessionInfo()
+```

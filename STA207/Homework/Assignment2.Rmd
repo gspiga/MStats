@@ -1,0 +1,274 @@
+---
+title: "STA 207: Assignment II"
+author: "Gianni Spiga 918363295"
+output: 
+  html_document:
+    df_print: paged
+    toc: true
+    toc_float: true
+    theme: flatly
+    code_folding: hide
+---
+***
+
+# Instructions 
+
+You may adapt the code in the course materials or any sources (e.g., the Internet, classmates, friends). In fact, you can craft solutions for almost all questions from the course materials with minor modifications. However, you need to write up your own solutions and acknowledge all sources that you have cited in the Acknowledgement section. 
+
+Failing to acknowledge any non-original efforts will be counted as plagiarism. This incidence will be reported to the Student Judicial Affairs. 
+
+***
+
+A consulting firm is investigating the relationship between wages and some demographic factors. The file `Wage.csv` contains three columns, which are 
+
+  - `wage`, the wage of the subject,
+  - `ethnicity`, the ethnicity of the subject,
+  - and `occupation`, the occupation of the subject. 
+
+
+```{r,echo=T,results=F,message=F}
+Wage=read.csv('Wage.csv');
+library(gplots)
+library(lme4)
+library(dplyr)
+attach(Wage)
+```
+
+***
+
+# Question 1 
+
+(1) Write down a two-way ANOVA model for this data. For consistency, choose the letters from $\{Y,\alpha, \beta, \mu, \epsilon\}$ and use the factor-effect form. 
+
+$$
+Y_{ijk} = \mu_{\cdot\cdot} + \alpha_i+\beta_j + (\alpha\beta)_{ij}+\epsilon_{ijk}, \\ k=1,\ldots, n, j=1,\ldots, b, i=1,\ldots, a
+$$
+where $\{\epsilon_{ijk}\}$ are distributed i.i.d $N(0,\sigma^2)$. We have the following constraints: 
+
+$$
+\begin{align}
+\sum_{i=1}^a \alpha_i & = \sum_{j=1}^b \beta_j=0\\
+\sum_{i=1}^a (\alpha\beta)_{ij} & =\sum_{j=1}^b (\alpha\beta)_{ij} =0
+\end{align}
+$$
+In our data set, we will set our factor $\alpha_i$ as occupation for $i = 1, \ldots, 6$ and factor $\beta_j$ as ethnicity for $j = 1,\ldots, 3$. The interaction term $(\alpha\beta)_{ij}$ is the interaction between ethnicity and occupation $\forall \ i,j$.
+
+***
+
+# Question 2
+
+(2) Obtain the main effects plots and the interaction plot. Summarize your findings.
+
+```{r}
+Wage <- Wage %>% mutate(across(c(ethnicity, occupation), factor))
+#Wage
+
+# Main effects plot
+library(gplots)
+#par(mfrow=c(1,3))
+plotmeans(
+  wage ~ ethnicity,
+  data = Wage,
+  xlab = "Ethnicity",
+  ylab = "Wage",
+  main = "Main effect, Ethnicity"
+)
+plotmeans(
+  wage ~ occupation,
+  data = Wage,
+  xlab = "Occupation",
+  ylab = "Wage",
+  main = "Main Effect, Occupation"
+)
+interaction.plot(Wage$ethnicity, Wage$occupation, Wage$wage, main = "Interaction")
+```
+
+We can see by the main effects plot, there is no distinct pattern of interactions, as the lines corresponding for individual combinations of main effects move consistently together. 
+
+***
+
+# Question 3 
+(3) Fit the ANOVA model described in Part 1. Obtain the ANOVA table and state your conclusions. Are the findings here consistent with your initial assessments from Part 2?
+
+```{r}
+library(car)
+
+# Checking for balanced 
+table(Wage$occupation, Wage$ethnicity)
+
+# model2 <- aov(wage ~ occupation*ethnicity, data = Wage)
+# summary(model2)
+
+model2 <- Anova(lm(wage ~ occupation*ethnicity, data = Wage), type = 3)
+model2
+
+# Test for normality 
+
+# Checking for homoscedasticity 
+leveneTest(wage ~ occupation, data = Wage)
+
+leveneTest(wage ~ ethnicity, data = Wage)
+
+# Checking for normality of residuals 
+# shapiro.test(model2$residuals)
+shapiro.test(lm(wage ~ occupation*ethnicity, data = Wage)$residuals)
+
+#hist(model2$residuals)
+hist(lm(wage ~ occupation*ethnicity, data = Wage)$residuals)
+```
+
+In our summary table, both p-values for ethnicity and the interaction term between occupation and ethnicity are over significance level $\alpha = 0.05$, thus we fail to reject the null hypothesis $H_0: \beta_j = 0$ and $H_0: (\alpha\beta)_{ij} = 0$. However, our factor term occupation is highly significant. Because of this, we can conclude that the type of occupation one has can significant effect the wage of a worker. It should be noted, that our assumptions of homoscedasticity and normality of residuals are violated in this model. 
+
+***
+# Question 4
+(4) Carry out a test to decide if the  effect of ethnicity is present on the full data set, at the significance level $\alpha=0.01$.
+
+Referring to the above table, we can see that by our F test for significance in the factor ethnicity, we are given a p-value of $0.1306$, thus forcing us to fail to reject at $\alpha = 0.01$ for the hypothesis $H_0: \beta_j = 0 \ \forall j = 1, \ldots, 3$. In other words, we can conclude that ethnicity has no observable effect on the full data set. 
+	
+***	
+# Question 5 
+(5) For this part and the next, assume that the occupations have been selected randomly. Write down an appropriate ANOVA model that is additive in the factors and explain the terms in the model.
+
+```{r, echo = F}
+# Checking for balanced 
+#table(Wage$occupation, Wage$ethnicity)
+```
+
+Using an additive model with random effects, we now have the following form :
+$$
+Y_{ijk} = \mu_{\cdot\cdot} + \alpha_i+\beta_j + \epsilon_{ijk}
+$$
+
+where assumptions are the same that do not involve an interaction term, which is dropped in this model. Our factor $\alpha_i$ corresponds still to our occupation and $\beta_j$ corresponds to ethnicity. The error term $\epsilon_{ijk}$ is still distributed i.i.d. $N(0,\sigma^2)$. Both occupation and ethnicity are treated as random effects in this model. 
+
+***
+# Question 6
+(6) Assuming that the model in Part 5 is appropriate, obtain an estimate of the proportion of variability that is due to variability in occupation.
+
+```{r}
+#model3 <- aov(wage ~ occupation + ethnicity, data = Wage)
+#summary(model3)
+
+fitREML <- lmer(wage ~ (1 |occupation)  + (1 |ethnicity), data = Wage, REML = TRUE)
+summary(fitREML)
+```
+
+We find that our proportion of variability that is due to the variability in occupation is $\frac{6.2279}{6.2279+  0.3239 + 21.7670} = 0.2199$  
+
+*** 
+
+# Question 7
+(7) 
+Consider a two-way ANOVA model with fixed effects 
+\begin{equation}\label{eqn:anova_two}
+Y_{i,j,k}=\mu + \alpha_i+ \beta_j+\epsilon_{i,j,k}, \  i =1,\ldots, a, j=1,\ldots, b, k=1,\ldots, n
+\end{equation}
+where $\{ \alpha_i\}$ satisfies that $\sum_{i}^a  \alpha_i=0$, $\{\beta_j\}$ satisfies that $\sum_{j}^b  \beta_j=0$,  and $\{\epsilon_{i,j,k}\}$ are i.i.d. $N(0,\sigma^2)$. Derive the least squares estimator from the above equation. 
+
+For $\mu_{..}$:
+
+$$
+\begin{align*}
+{\rm SSE} = \sum_i \sum_j \sum_k e_{ijk}^2 &= \sum_i \sum_j \sum_k \big(Y_{ijk}-\bar{Y}_{ij\cdot}\big)^2 \\
+&= \sum_i \sum_j \sum_k \big(Y_{ijk}-(\mu_{..} + \alpha_i+ \beta_j)\big)^2 \\
+\frac{\partial}{\partial \mu} {\rm SSE} &= \sum_i \sum_j \sum_k -2 \big(Y_{ijk}-\mu_{..} - \alpha_i - \beta_j\big) \\
+0 &= \sum_i \sum_j \sum_k  \big(Y_{ijk}-\mu_{..} - \alpha_i - \beta_j\big) \\
+ &= \sum_i \sum_j \sum_k  Y_{ijk}- \sum_i \sum_j \sum_k \mu_{..} - \sum_i \sum_j \sum_k \alpha_i - \sum_i \sum_j \sum_k \beta_j \\ 
+ &= \sum_i \sum_j \sum_k  Y_{ijk}- \sum_i \sum_j \sum_k \mu_{..} \\ 
+ \sum_i \sum_j \sum_k  Y_{ijk} &= \sum_i \sum_j \sum_k \mu_{..} \\
+ \sum_i \sum_j \sum_k  Y_{ijk} &= a b n  \mu_{..} \\ 
+ \frac{ \sum_i \sum_j \sum_k  Y_{ijk}}{a b n} &= \mu..\\
+  \bar{Y}_{...} &= \mu..
+\end{align*}
+$$
+For $\alpha_i$, 
+
+$$
+\begin{align*}
+{\rm SSE} &= \sum_i \sum_j \sum_k \big(Y_{ijk}-\bar{Y}_{ij\cdot}\big)^2 \\
+&= \sum_i \sum_j \sum_k \big((Y_{ijk})^2  - 2 Y_{ijk} \bar{Y}_{ij\cdot} + (\bar{Y}_{ij\cdot})^2\big) \\ 
+&= \sum_i \sum_j \sum_k \big((Y_{ijk})^2  - 2(\mu_{..} + \alpha_i+ \beta_j) Y_{ijk} + (\mu_{..} + \alpha_i+ \beta_j)^2\big) \\ 
+\frac{\partial}{\partial \alpha_i}{\rm SSE} &= \sum_i \sum_j \sum_k -2Y_{ijk} + 2(\mu_{..} + \alpha_i+ \beta_j) \\ 
+0 &= \sum_i \sum_j \sum_k Y_{ijk}  - (\mu_{..} + \alpha_i+ \beta_j) \\
+0 &= \sum_i \sum_j \sum_k \big(Y_{ijk}  - \mu_{..}\big) - \big(bn \sum_i \alpha_i \big) - \big(an\sum_j\beta_j\big) \\
+bn \sum_i \alpha_i  &= \sum_i \sum_j \sum_k \big(Y_{ijk}  - \mu_{..}\big) \big(\text{ By constraint} \sum_j \beta_j = 0\big)\\ 
+\sum_i \alpha_i  &= \frac{\sum_i \sum_j \sum_k \big(Y_{ijk}  - \mu_{..}\big)}{bn} \\
+\alpha_i  &= \big(\bar{Y}_{i\cdot\cdot} - \bar{Y}_{\cdot\cdot\cdot}\big) \\
+\end{align*} 
+$$
+For $\beta_j$: 
+
+$$
+\begin{align*}
+{\rm SSE} &= \sum_i \sum_j \sum_k \big(Y_{ijk}-\bar{Y}_{ij\cdot}\big)^2 \\
+&= \sum_i \sum_j \sum_k \big((Y_{ijk})^2  - 2 Y_{ijk} \bar{Y}_{ij\cdot} + (\bar{Y}_{ij\cdot})^2\big) \\ 
+&= \sum_i \sum_j \sum_k \big((Y_{ijk})^2  - 2(\mu_{..} + \alpha_i+ \beta_j) Y_{ijk} + (\mu_{..} + \alpha_i+ \beta_j)^2\big) \\ 
+\frac{\partial}{\partial \beta_j}{\rm SSE} &= \sum_i \sum_j \sum_k -2Y_{ijk} + 2(\mu_{..} + \alpha_i+ \beta_j) \\ 
+0 &= \sum_i \sum_j \sum_k Y_{ijk}  - (\mu_{..} + \alpha_i+ \beta_j) \\
+0 &= \sum_i \sum_j \sum_k \big(Y_{ijk}  - \mu_{..}\big) - \big(bn \sum_i \alpha_i \big) -  \big(an\sum_j\beta_j\big) \\
+\big(an\sum_j\beta_j\big)  &= \sum_i \sum_j \sum_k \big(Y_{ijk}  - \mu_{..}\big) \big(\text{ By constraint} \sum_i \alpha_i = 0\big)\\ 
+\sum_j\beta_j &= \frac{\sum_i \sum_j \sum_k \big(Y_{ijk}  - \mu_{..}\big)}{an} \\
+\beta_j  &= \big(\bar{Y}_{\cdot j\cdot} - \bar{Y}_{\cdot\cdot\cdot}\big) \\
+\end{align*} 
+$$
+
+***
+
+# Question 8
+(8)
+Consider the following models 
+\begin{equation}\label{eqn:cellmeans}
+Y_{i,j,k}=\mu_{i,j}+\epsilon_{i,j,k}, \ k=1,\ldots, n, i =1,\ldots, a, j=1,\ldots, b, 
+\end{equation}
+and 
+\begin{equation}\label{eqn:reg}
+Y_{i,j,k}= \sum_{l=1}^a \sum_{m=1}^b \beta_{l,m} X_{l,m;i,j,k}+\epsilon_{i,j,k}, \ k=1,\ldots, n, i =1,\ldots, a, j=1,\ldots, b,
+\end{equation}
+where $\{\epsilon_{i,j,k}\}$ are i.i.d. $N(0,\sigma^2)$ and $X_{l,m;i,j,k}=1$ when $(l,m)=(i,j)$ and $X_{l,m;i,j,k}=0$ otherwise. Express $\{\beta_{l,m}: l=1,\ldots, a; m=1,\ldots, b\}$ using $\{\mu_{i,j}: i=1,\ldots, a; j=1,\ldots, b\}$.
+
+Solution: 
+
+$$
+\begin{align*}
+\mu_{ij} + \epsilon_{i,j,k} &= \sum_{l=1}^a \sum_{m=1}^b \beta_{l,m} X_{l,m;i,j,k}+\epsilon_{i,j,k} \\ 
+\mu_{ij}  &= \sum_{l=1}^a \sum_{m=1}^b \beta_{l,m} X_{l,m;i,j,k} \\
+\text{This  double sum will only be the addition of zeros until } (l,m) &=(i,j), \text{when it will then be } \beta_{ij} \text{ thus:}\\
+\mu_{ij} &= \beta_{ij}
+\end{align*}
+$$
+***
+
+# Question 9
+(9) 
+With some abuse of notation, we rewrite the regression model from Question 8 as 
+\begin{equation}\label{eqn:reg_new}
+Y= X\beta + \epsilon,
+\end{equation}
+where $Y$ is a $n_T$-dimensional vector, $X$ is an $n_T \times p$ matrix, $\beta$ is a $p$-dimensional vector, and $\{\epsilon\} \sim {\rm MVN}(0, \sigma^2 {\rm I})$, i.e., multivariate normal with covariance matrix $\sigma^2 {\rm I}$. Express the residual sum of squares and explained sum of squares in $Y$ and $X$, and then show that these two sum of squares are independent. 
+
+We know that $SSE = Y^T(I - P_x)Y$ and $SSR = Y^T(P_x - P_1)Y$, which are functions of $(I - P_x)Y$ and $(P_x - P_1)Y$ respectfully. Thus we need to show that these two terms have covariance zero. 
+
+$$
+\begin{align*}
+cov((I - P_x)Y, (P_x - P_1)Y) &= E\{[(I - P_x)Y - E((I - P_x)Y)][(P_x - P_1)Y - E((P_x - P_1)Y)]\} \\
+&= E\{[(I - P_x)Y - (I - P_x)E(Y)][(P_x - P_1)Y - (P_x - P_1)E(Y)]\} \\
+&= E\{[(I - P_x)(Y - E(Y))][(P_x - P_1) (Y - E(Y))]\} \\ 
+&= E\{[(I - P_x)(P_x - P_1)(Y - E(Y))^2] \\
+&= (I - P_x)(P_x - P_1) E\{(Y - E(Y))^2\} \\
+&= (I - P_x)(P_x - P_1) \sigma^2 \\
+&= (IP_x - IP_1 - P_x^2 + P_x*P_1)\sigma^2 \\
+&= (P_x - P_1 - P_x + P_1)\sigma^2 \\
+&= 0 * \sigma^2 \\
+&= 0
+\end{align*}
+$$
+Since $(I - P_x)Y$ and $(P_x - P_1)Y$ are multivariate normally distributed, we can say that the SSE and SSR, which are functions of these two terms, are independent. 
+
+# Acknowledgement {-}
+
+I'd like to acklnowledge Kate Jones, Jonas Kempf, and Niraj Bangari in their assistance to a few of problems in this assignment. 
+
+# Session information {-}
+```{r}
+sessionInfo()
+```
