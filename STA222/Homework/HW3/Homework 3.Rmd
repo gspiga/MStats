@@ -1,0 +1,144 @@
+---
+title: "Homework 3"
+author: "Gianni Spiga"
+date: '2022-10-15'
+output: html_document
+---
+
+## Loading in the Data
+
+```{r, message = FALSE, warning=FALSE}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(plotly)
+library(muhaz)
+```
+
+
+
+```{r}
+vars <- c("id", "clinic", "status", "time", "prison", "methadone")
+addicts <-
+  read.table(
+    url(
+      "https://dmrocke.ucdavis.edu/Class/BST222.2022.Fall/addicts.txt"
+    ),
+    header = F,
+    col.names = vars
+  )
+#addicts
+```
+
+## Question 1 
+
+```{r}
+#change variables to factors to be used in Cox PH
+addicts$clinic <- factor(addicts$clinic,labels=c("Clinic1","Clinic2"))
+addicts$prison <- factor(addicts$prison,labels=c("No","Yes"))
+
+head(addicts)
+
+surv_object <- Surv(time = addicts$time, event = addicts$status)
+KMcurves <- survfit(surv_object ~ clinic, data = addicts)
+
+KMplot <- ggsurvplot(KMcurves) + labs(title = "Tenure in the Clinic")
+ggplotly(KMplot[[1]])
+```
+
+## Question 2
+
+```{r}
+survdiff(surv_object ~ clinic, data = addicts)
+```
+
+We can see that our p-value is below any reasonable $\alpha$, allowing us to conlclude that there is a significant difference between the two clinics' process.
+
+## Question 3
+
+```{r}
+NAcurves <-
+  survfit(surv_object ~ clinic, type = "fleming-harrington", data = addicts)
+
+#Cumulative Hazard plot
+cumHazPlot <-
+  ggsurvplot(
+    NAcurves,
+    fun = "cumhaz",
+    palette = c("#581845", "#FFC300"),
+    ggtheme = theme_light()
+  ) + ggtitle("Cumulative Hazard for Two Clinics")
+ggplotly(cumHazPlot[[1]])
+
+```
+
+## Question 4
+
+```{r}
+# Complimentary log-log survival plot
+cumHazPlot <-
+  ggsurvplot(
+    NAcurves,
+    fun = "cloglog",
+    palette = c("#581845", "#FFC300"),
+    ggtheme = theme_light()
+  ) + ggtitle("Complimentary Log-Log for Two Clinics") 
+ggplotly(cumHazPlot[[1]])
+
+```
+
+For most of the plot (besides the very beginning), our two lines are parallel, suggesting our hazards are proportional. However, neither of these lines are straight, as they both have curving in their shape. This suggests that the Weibull distribution may not be appropriate for failure times in this data. 
+
+## Question 5
+
+```{r}
+# Clinic is already a factor
+class(addicts$clinic)
+
+# Building a Cox Model
+addicts.cox <- coxph(surv_object ~ clinic, data = addicts)
+summary(addicts.cox)
+```
+
+We can see that the hazard ratio for Clinic 2 vs Clinic 1 is $e^{-1.0754}$, meaning that Clinic 2 has $0.3412$ times the risk of death compared to Clinic 1. Our p-value is very small, smaller than any reasonable $\alpha$, so we can conclude that our $\beta$ is significantly different from zero. 
+
+Our 95% confidence interval for $e^{Clinic_2}$ is the interval $(0.2249, 0.5176)$, which does not contain 1. Thus we can say that the risk for clinic 2 is significantly lower than clinic 1. 
+
+## Question 6
+
+For this dataset, our best statistic of choice would be the Wald Test since we have a larger sample size and Likelihood Ratio Test performs better when sample size is small. However, all three tests tell us (with Wald being the smallest p-value), that we should conclude there is a significant difference between the two clinics. 
+
+## Question 7
+
+```{r}
+addicts.cox2 <- coxph(surv_object ~ clinic + prison + methadone, data = addicts)
+summary(addicts.cox2)
+
+```
+Observing our hazard ratio coefficient confidence intervals, we can see that the prison variable CI contains 1, indicating our variable is not significant, which agrees with the respective p-value above $\alpha = 0.05$. However we can see that the methadone ratio is indeed significant. 
+
+## Question 8
+
+```{r, warning=FALSE}
+addicts.cox3 <- coxph(surv_object ~ factor(clinic), data = addicts)
+summary(addicts.cox3)
+
+KMcurves <- survfit(surv_object ~ factor(clinic), data = addicts)
+
+covariates <- data.frame(clinic = c("Clinic1", "Clinic2"), prison = "No", methadone = "65")
+
+
+# CoxPH <- survfit(addicts.cox3, data.frame(clinic = c("Clinic1", "Clinic2")), conf.int = F)
+CoxPH <- survfit(addicts.cox3, covariates, conf.int = F)
+
+fit <- list(CoxPH = CoxPH, KapMei = KMcurves)
+
+compPlot <-
+  ggsurvplot_combine(fit, data = addicts) + labs(title = "Comparison of Cox PH Curves to Kaplan-Meier with No Prison and Methadone at 65")
+ggplotly(compPlot[[1]])
+
+```
+
+We can see that from the plots the Cox Proportional Hazard Model predicts the survivability of addicts from Clinic 1 very accurately, while the the Cox PH for Clinic 2 patients over predicts until right before $Time = 750$, where the Cox PH model begins to under predict the survival probability of Clinic 2 addicts. 

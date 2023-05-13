@@ -1,0 +1,173 @@
+---
+title: "Homework 5"
+author: "Gianni Spiga"
+date: '2022-10-27'
+output: html_document
+---
+
+```{r, message = FALSE, warning=FALSE}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(plotly)
+library(muhaz)
+library(ggthemes)
+```
+
+```{r}
+vars <- c("id", "clinic", "status", "time", "prison", "methadone")
+addicts <-
+  read.table(
+    url(
+      "https://dmrocke.ucdavis.edu/Class/BST222.2022.Fall/addicts.txt"
+    ),
+    header = F,
+    col.names = vars
+  )
+#addicts
+```
+
+## Question 1
+
+```{r}
+#change variables to factors to be used in Cox PH
+addicts$clinic <-
+  factor(addicts$clinic, labels = c("Clinic1", "Clinic2"))
+addicts$prison <- factor(addicts$prison, labels = c("No", "Yes"))
+
+#head(addicts)
+
+surv_object <- Surv(time = addicts$time, event = addicts$status)
+addicts.cox.strat <-
+  coxph(surv_object ~ strata(clinic) + prison + methadone, data = addicts)
+summary(addicts.cox.strat)
+```
+
+## Question 2
+
+```{r}
+addicts.zph.stra <- cox.zph(addicts.cox.strat)
+addicts.zph.stra
+
+#For clinic
+ggcoxzph(addicts.zph.stra[1], se = FALSE, font.main = 12, ggtheme = theme_solarized(), point.col = "#0096FF", ylim = c(-4,4))
+
+#For prison
+ggcoxzph(addicts.zph.stra[2], se = FALSE, font.main = 12, ggtheme = theme_solarized(), point.col = "#0096FF", ylim = c(-0.3,0.3))
+```
+We can see from the plot that the prison variable has a sinusoidal pattern of variation. Meanwhile, our methadone variable seems to have little evidence of a pattern, with a plot that shows random scatter. 
+
+
+## Question 3
+
+
+```{r, warning = FALSE}
+addicts.mart <- residuals(addicts.cox.strat, type = "martingale")
+
+addicts.cs <- addicts$status - addicts.mart
+
+#Cumulative hazard 
+surv.csr <- survfit(Surv(addicts.cs, addicts$status) ~1, type = "fleming-harrington", data = addicts)
+
+#plot(surv.csr, fun ="cumhaz")
+
+
+cumHazPlot <-
+  ggsurvplot(
+    surv.csr,
+    fun = "cumhaz",
+    conf.int = TRUE,
+    palette = c("#581845"),
+    ggtheme = theme_solarized()
+  ) + ggtitle("Cumulative Hazard for Cox-Snell Residuals")
+#ggplotly(cumHazPlot[[1]])
+
+
+ggplotly(cumHazPlot$plot + geom_abline())
+```
+We can see that after time about 2.5, our cumulative hazard does not follow our straight trend line. This gives us the impression that our model lacks in being a good fit for the data. 
+
+## Question 4
+
+```{r}
+#This time, without methadone
+addicts.coxNoMeth <- coxph(surv_object ~ strata(clinic) + prison, data = addicts)
+addicts.mart <- residuals(addicts.coxNoMeth, type = "martingale")
+
+
+lowessOBJ <- as.data.frame(lowess(addicts$methadone, addicts.mart))
+
+ggplotly(
+  ggplot() + aes(addicts$methadone, addicts.mart) + geom_point(col = "#FFA000") + labs(x = "Methadone", y = "Martingale Residuals", title = "Martingale Residuals vs. Methadone Dosage") + geom_line(data = lowessOBJ, aes(x = x, y = y), col = "#388E3C") + theme_solarized()
+)
+```
+
+Since our lowess line seems pretty linear, we would advise that a transformation of the data is not neccessary. 
+
+## Question 5
+
+```{r}
+# With Linear predictor
+addicts.predict <- predict(addicts.cox.strat)
+addicts.mart <- residuals(addicts.cox.strat, type = "martingale")
+
+#Deviance and df beta
+addicts.dev <- residuals(addicts.cox.strat, type = "deviance")
+addicts.dfb <- residuals(addicts.cox.strat, type = "dfbeta")
+
+#MArtingale vs Linear Predictor
+ggplotly(
+  ggplot() + aes(
+    x = addicts.predict,
+    y = addicts.mart,
+    label = rownames(addicts)
+  ) + geom_point() + labs(x = "Linear Predictor", y = "Martingale Residual", title = "Martingale Residuals vs Linear Predictor") + theme_solarized()
+)
+
+# Deviance vs Linear Predictor
+ggplotly(
+  ggplot() + aes(
+    x = addicts.predict,
+    y = addicts.dev,
+    label = rownames(addicts)
+  ) + geom_point() + labs(x = "Linear Predictor", y = "Deviance Residual", title = "Deviance Residuals vs Linear Predictor") + theme_solarized()
+)
+
+# DfBeta vs Linear Predictor
+# Clinic
+# ggplotly(
+#   ggplot() + aes(x = as.numeric(rownames(addicts)), y = addicts.dfb[, 1]) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Clinic Type", title = "dfbeta Values for Observation Number by Clinic Type") + theme_solarized()
+# )
+
+# Prison
+ggplotly(
+  ggplot() + aes(x = as.numeric(rownames(addicts)), y = addicts.dfb[, 1]) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Prison Status", title = "dfbeta Values for Observation Number by Prison Status") + theme_solarized()
+)
+
+#Methadone
+ggplotly(
+  ggplot() + aes(x = as.numeric(rownames(addicts)), y = addicts.dfb[, 2]) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Methadone Level", title = "dfbeta Values for Observation Number by Methadone Level") + theme_solarized()
+)
+
+
+```
+### Observations to Examine by Residuals and Influence 
+
+* Martingale Residuals
+  + 8,9, 12, 26, 54
+* Deviance Residuals
+  + 8, 123, 156, 175
+* Prison Influence
+  + 8, 9 ,12, 26
+* Methadone Level Influence
+  + 26, 70, 84, 156
+  
+  From the residual plots, the most important pbservations to examine would be 8,9 26, 70, and 156. Let's observe these two observations:
+  
+```{r}
+addicts[c(8, 9, 26, 70, 156),]
+``` 
+
+Observations 8 and 26 were prisoners who were censored observations in our data. 70 was a censored observation who was not a prisoner, but had a very long time. Given their long survival times, they could have felt they no longer needed to be part of the study. These prisoners also had low methadone levels. Observations 9 and 156 were recorded as leaving the clinic. 156, had a very high methadone level however. 

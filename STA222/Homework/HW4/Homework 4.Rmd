@@ -1,0 +1,191 @@
+---
+title: "Homework 4"
+author: "Gianni Spiga"
+date: "2022-10-21"
+output: html_document
+---
+
+```{r, message = FALSE, warning=FALSE}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(plotly)
+library(muhaz)
+library(ggthemes)
+```
+
+```{r}
+vars <- c("id", "clinic", "status", "time", "prison", "methadone")
+addicts <-
+  read.table(
+    url(
+      "https://dmrocke.ucdavis.edu/Class/BST222.2022.Fall/addicts.txt"
+    ),
+    header = F,
+    col.names = vars
+  )
+#addicts
+```
+
+## Question 1
+
+```{r}
+#change variables to factors to be used in Cox PH
+addicts$clinic <- factor(addicts$clinic,labels=c("Clinic1","Clinic2"))
+addicts$prison <- factor(addicts$prison,labels=c("No","Yes"))
+
+head(addicts)
+
+surv_object <- Surv(time = addicts$time, event = addicts$status)
+addicts.cox <- coxph(surv_object ~ clinic + prison + methadone, data = addicts)
+#summary(addicts.cox)
+
+addicts.zph <- cox.zph(addicts.cox)
+addicts.zph
+
+#For clinic
+ggcoxzph(addicts.zph[1], se = FALSE, font.main = 12, ggtheme = theme_solarized(), point.col = "#0096FF", ylim = c(-7,7))
+
+#For prison
+ggcoxzph(addicts.zph[2], se = FALSE, font.main = 12, ggtheme = theme_solarized(), point.col = "#0096FF", ylim = c(-4,4))
+
+#For methadone/
+ggcoxzph(addicts.zph[3], se = FALSE, font.main = 12, ggtheme = theme_solarized(), point.col = "#0096FF", ylim = c(-0.5,0.5))
+```
+
+When we look at the plots of our Schoenfield Residuals, we can see that our variation over time gets larger negative residuals as time goes on for the clinic variable. Our plot for the prison gives the impression that we have a pattern of variation, however our p-value conflcits this conclusion. Along with this, it should be noted for our prison variable is not as huge than that of the clinic variable. Because of this,  we can see that both methadone and prison variables are significantly proportional while our clinic variable violates our proportinality assumption at any reasonable $\alpha$. 
+
+## Question 2
+
+```{r, warning = FALSE}
+addicts.mart <- residuals(addicts.cox, type = "martingale")
+
+addicts.cs <- addicts$status - addicts.mart
+
+#Cumulative hazard 
+surv.csr <- survfit(Surv(addicts.cs, addicts$status) ~1, type = "fleming-harrington", data = addicts)
+
+#plot(surv.csr, fun ="cumhaz")
+
+
+cumHazPlot <-
+  ggsurvplot(
+    surv.csr,
+    fun = "cumhaz",
+    conf.int = TRUE,
+    palette = c("#581845"),
+    ggtheme = theme_solarized()
+  ) + ggtitle("Cumulative Hazard for Cox-Snell Residuals")
+#ggplotly(cumHazPlot[[1]])
+
+
+ggplotly(cumHazPlot$plot + geom_abline())
+```
+
+We can see that since our Cox-Snell residuals curve fits a standard line quite well, we can say we do not observe a lack of fit. 
+
+## Question 3
+
+```{r}
+#This time, without methadone
+addicts.coxNoMeth <- coxph(surv_object ~ clinic + prison, data = addicts)
+addicts.mart <- residuals(addicts.cox, type = "martingale")
+
+
+lowessOBJ <- as.data.frame(lowess(addicts$methadone, addicts.mart))
+
+ggplotly(
+  ggplot() + aes(addicts$methadone, addicts.mart) + geom_point(col = "#FFA000") + labs(x = "Methadone", y = "Martingale Residuals", title = "Martingale Residuals vs. Methadone Dosage") + geom_line(data = lowessOBJ, aes(x = x, y = y), col = "#388E3C") + theme_solarized()
+)
+
+
+#Create categorical methadone
+addicts$catMeth <-
+  cut(addicts$methadone,
+      c(0, 60, 79, 200),
+      labels = c("<60", "60-79", "80+"))
+
+addicts$catMeth <- as.factor(addicts$catMeth)
+
+#New cox model
+addicts.coxCatMeth <-
+  coxph(surv_object ~ clinic + prison + catMeth, data = addicts)
+
+
+#We print AIC using drop1
+# This is with methadone as quantitative
+drop1(addicts.cox, test = "Chisq")
+
+#This is with methadone as categorical 
+drop1(addicts.coxCatMeth, test = "Chisq")
+```
+
+We can see that the model with methadone as a quantitative has a better AIC than the one with methadone as categorical. Along with that, the quantitative methadone model has has a smaller p-value for the ChiSq test, providing greater statistically significant strentgh. We can conclude that replacing the quantitavie methadone with a 3-category factor does matter, as it hurts the strength of our model. 
+
+## Question 4
+
+```{r}
+# With Linear predictor
+addicts.predict <- predict(addicts.cox)
+
+#Deviance and df beta
+addicts.dev <- residuals(addicts.cox, type = "deviance")
+addicts.dfb <- residuals(addicts.cox, type = "dfbeta")
+
+#MArtingale vs Linear Predictor
+ggplotly(
+  ggplot() + aes(
+    x = addicts.predict,
+    y = addicts.mart,
+    label = rownames(addicts)
+  ) + geom_point() + labs(x = "Linear Predictor", y = "Martingale Residual", title = "Martingale Residuals vs Linear Predictor") + theme_solarized()
+)
+
+# Deviance vs Linear Predictor
+ggplotly(
+  ggplot() + aes(
+    x = addicts.predict,
+    y = addicts.dev,
+    label = rownames(addicts)
+  ) + geom_point() + labs(x = "Linear Predictor", y = "Deviance Residual", title = "Deviance Residuals vs Linear Predictor") + theme_solarized()
+)
+
+# DfBeta vs Linear Predictor
+# Clinic
+ggplotly(
+  ggplot() + aes(x = as.numeric(rownames(addicts)), y = addicts.dfb[, 1]) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Clinic Type", title = "dfbeta Values for Observation Number by Clinic Type") + theme_solarized()
+)
+
+# Prison
+ggplotly(
+  ggplot() + aes(x = as.numeric(rownames(addicts)), y = addicts.dfb[, 2]) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Prison Status", title = "dfbeta Values for Observation Number by Prison Status") + theme_solarized()
+)
+
+#Methadone
+ggplotly(
+  ggplot() + aes(x = as.numeric(rownames(addicts)), y = addicts.dfb[, 3]) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Methadone Level", title = "dfbeta Values for Observation Number by Methadone Level") + theme_solarized()
+)
+
+```
+### Observations to Examine by Residuals and Influence 
+
+* Martingale Residuals
+  + 8, 9, 26
+* Deviance Residuals
+  + 8, 26, 123, 175, 187
+* Clinic Influence 
+  + 111, 131, 136
+* Prison Influence
+  + 8, 9 , 12, 26
+* Methadone Level Influence
+  + 84, 111, 156
+  
+  From the residual plots, the most important pbservations to examine would be 8 9, 26, and 111. Let's observe these two observations:
+
+```{r}
+addicts[c(8, 9, 26, 111),]
+``` 
+
+Observations 8, 26, an 111 were prisoners who were censored observations in our data. Given their long survival times, they could have felt they no longer needed to be part of the study. These prisoners also had low methadone levels. However, 111 differs from 8 and 26 since they are from Clinic 2. Observation 9 is more unique, they had a much longer time who actually was recorded as leaving the clinic, again with a low methadone level. 

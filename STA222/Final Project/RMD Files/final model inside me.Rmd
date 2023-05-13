@@ -1,0 +1,494 @@
+## Appendix
+
+```{r}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(muhaz)
+library(plyr)
+library(plotly)
+library(ggthemes)
+library(MASS)
+```
+
+```{r}
+# Loading in data
+data(std)
+# Checking for NA Values in data set 
+any(is.na(std))
+
+
+
+# add number of symptoms column
+symptoms <- c("itch","lesion","rash","lymph", "abdpain","discharge","dysuria")
+num_symptoms = rowSums(std[,symptoms])
+num_symptoms <-
+  mapvalues(
+    num_symptoms,
+    from = c(0,1,2,3,4,5),
+    to = c("No Symptom","Has Symptom","Has Symptom","Has Symptom","Has Symptom","Has Symptom")
+  )
+std["num_symptoms"] = num_symptoms
+std$num_symptoms = as.factor(std$num_symptoms)
+std$num_symptoms = relevel(std$num_symptoms, ref="Has Symptom")
+
+
+
+
+factor.cols <-
+  c(
+    "race",
+    # Race (W=white, B=black)
+    "marital",
+    # Marital status (D=divorced / separated, M=married, S=single)
+    "iinfct",
+    # Initial infection (1= gonorrhea, 2=chlamydia, 3=both)
+    "os12m",
+    # Oral sex within 12 months (1=yes, 0=no)
+    "os30d",
+    # Oral sex within 30 days (1=yes, 0=no)
+    "rs12m",
+    # Rectal sex within 12 months (1=yes, 0=no)
+    "rs30d",
+    # Rectal sex within 30 days (1=yes, 0=no)
+    "abdpain",
+    # Presence of abdominal pain (1=yes, 0=no)
+    "discharge",
+    # Sign of discharge (1=yes, 0=no)
+    "dysuria",
+    # Sign of dysuria (1=yes, 0=no)
+    "condom",
+    # Condom use (1=always, 2=sometime, 3=never)
+    "itch",
+    # Sign of itch (1=yes, 0=no)
+    "lesion",
+    # Sign of lesion (1=yes, 0=no)
+    "rash",
+    # Sign of rash (1=yes, 0=no)
+    "lymph",
+    # Sign of lymph (1=yes, 0=no)
+    "vagina",
+    # Involvement vagina at exam (1=yes, 0=no)
+    "dchexam",
+    # Discharge at exam (1=yes, 0=no)
+    "abnode" # Abnormal node at exam (1=yes, 0=no)
+  )
+std[factor.cols] <- lapply(std[factor.cols], as.factor)
+#lapply(std, class)
+std$race <-
+  mapvalues(std$race,
+            from = c("W", "B"),
+            to = c("White", "Black"))
+std$marital <-
+  mapvalues(
+    std$marital,
+    from = c("D", "M", "S"),
+    to = c("Divorced/Separated", "Married", "Single")
+  )
+std$iinfct <-
+  mapvalues(
+    std$iinfct,
+    from = c("1", "2", "3"),
+    to = c("gonorrhea", "chlamydia", "both")
+  )
+std$condom <-
+  mapvalues(
+    std$condom,
+    from = c("1", "2", "3"),
+    to = c("always", "sometime", "never")
+  )
+
+# Building the Survival Object 
+infect <- std$iinfct
+surv_object <- Surv(time = std$time, event = std$rinfct)
+```
+
+### Exploratory Data Analysis
+
+Take a look at correlation between symptoms and different infection types.
+
+Is it more common for one type of infection based on type of sex (oral/anal).
+
+```{r}
+fig1 <-
+  plot_ly(
+    data = data.frame(table(std$iinfct)),
+    labels = ~ Var1,
+    values = ~ Freq,
+    type = 'pie'
+  )
+fig1 <-
+  fig1 %>% layout(
+    title = "Percentage of Infection Type",
+    xaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    ),
+    yaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    )
+  )
+fig1
+fig2 <-
+  plot_ly(
+    data = data.frame(table(std$npartner)),
+    labels = ~ Var1,
+    values = ~ Freq,
+    type = 'pie'
+  )
+fig2 <-
+  fig2 %>% layout(
+    title = "Number of Partners",
+    xaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    ),
+    yaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    )
+  )
+fig2
+```
+
+### Kaplan-Meier Curves 
+```{r}
+KMobj <- survfit(surv_object ~ iinfct, data = std)
+KMplot <- ggsurvplot(KMobj) + labs(title = "Kaplan-Meier Curves for Initial Infection Type") 
+ggplotly(KMplot[[1]])
+```
+
+### Kaplan-Meier Curves differences by actual numbers 
+
+```{r}
+print(survdiff(surv_object ~ iinfct, data = std))
+```
+
+
+### Plot the cumulative hazards vs. time and the complimentary log-log survival vs. log time.
+
+```{r}
+{plot(survfit(surv_object ~ iinfct, data = std),col=4:6,lwd=1,fun="cumhaz")
+title("Cumulative Hazard for intital infection")
+legend("topleft",c("gonorrhea","chlamydia","both"),col=4:6,lwd=1)}
+```
+
+```{r}
+NAcurves <- survfit(surv_object ~ iinfct, data = std,type="fleming-harrington")
+{plot(NAcurves,col=1:3,lwd=2,fun="cloglog", ylab = "ln[H(t)]", xlab = "ln(t)")
+title("Complimentary log-log survival vs. log time")
+legend("bottomright",c("gonorrhea","chlamydia","both"),col=1:3,lwd=2)}
+```
+
+
+# Add hazard ratio plot.
+ 
+ 
+```{r}
+cox <- coxph(surv_object ~ iinfct, data = std)
+summary(cox)
+hodg.zph <- cox.zph(cox)
+plot(hodg.zph, main = "Schoenfeld Residuals for Initial Infection Type")
+test.ph <- cox.zph(cox)
+test.ph
+```
+
+P-value here is large, so we do not have a violation of proportional hazards.
+
+```{r}
+cox1 <- coxph(surv_object~iinfct+marital+race+os12m+os30d+rs12m+rs30d+abdpain+ discharge+dysuria+condom+itch+lesion+rash+lymph+vagina+dchexam+abnode+age+yschool+npartner, data = std)
+summary(cox1)
+drop1(cox1,test = "Chisq")
+```
+
+Drop test indicates that condom may also be significant.  
+
+```{r}
+cox2<- coxph(surv_object ~ iinfct+condom+vagina+dchexam+yschool, data = std)
+summary(cox2)
+```
+```{r}
+cox3<- coxph(surv_object ~ iinfct+vagina+dchexam+yschool, data = std)
+summary(cox3)
+```
+```{r}
+
+AIC(cox2)
+
+AIC(cox3)
+
+# AIC indicates that the model with condom is a better fit.
+
+std$condom <-
+  mapvalues(
+    std$condom,
+    from = c("always", "sometime", "never"),
+    to = c("use", "use", "never")
+  )
+
+cox4<- coxph(surv_object ~ iinfct+condom+vagina+dchexam+yschool, data = std)
+summary(cox4)
+drop1(cox4)
+
+AIC(cox4)
+
+# AIC is also now lower, so this will be our model.
+
+```
+
+
+## CODE BELOW: categorical version of yschool and cox5
+```{r}
+cat_yschool = cut(std$yschool, c(-Inf, 7, 12, Inf), labels = c("6-7","8-12","above 12"))
+std['cat_yschool'] = cat_yschool
+
+# re-level to use "8-12" as the reference group since it's survival curve is in between the other two groups
+
+std$cat_yschool = relevel(std$cat_yschool, ref="8-12")
+```
+
+```{r}
+# cox5 <- coxph(surv_object ~ iinfct+condom+vagina+dchexam+cat_yschool, data = std)
+# 
+# summary(cox5)
+```
+
+
+In cox6 the "discharge at exam" is dropped.
+
+```{r}
+# cox6 <- coxph(surv_object ~ iinfct+condom+vagina+cat_yschool, data = std)
+# summary(cox6)
+```
+
+```{r}
+
+# cox6.zph <- cox.zph(cox6)
+# 
+# plot(cox6.zph[1], main="Schoenfeld Residual for Initial Infectoion")
+# 
+# plot(cox6.zph[2], main="Schoenfeld Residual for Condom Use")
+# 
+# plot(cox6.zph[3], main="Schoenfeld Residual for Involvement of Vagina Examination")
+# 
+# plot(cox6.zph[4], main="Schoenfeld Residual for Schooling Years")
+
+```
+
+
+```{r}
+
+############### THE FINAL MODEL #####################
+cox.model = coxph(surv_object ~ iinfct+condom+vagina+cat_yschool+os30d+abdpain, data = std)
+summary(cox.model)
+#####################################################
+```
+
+```{r}
+drop1(cox.model)
+```
+```{r}
+AIC(cox.model)
+```
+
+
+
+```{r}
+# Cox-Snell
+cox.cs <- std$rinfct-residuals(cox.model, type="martingale")
+
+# Cum. Hazard for cox-snell residual
+cox.cs.surv <- Surv(cox.cs, std$rinfct)
+cox.cs.fit <- survfit(cox.cs.surv~1,type="fleming-harrington")
+
+plot(cox.cs.fit, fun="cumhaz", xlab="Cox-Snell Residuals", ylab="Cumulative Hazard")
+abline(0,1, col=2, lwd=2, lty=2)
+title("Cumulative Hazard of Cox-Snell Residuals")
+```
+
+# Should we apply stratification?
+
+```{r}
+# cox7 <- coxph(surv_object ~ strata(iinfct) + strata(condom) + vagina + cat_yschool, data = std)
+# cox7.cs <- std$rinfct-residuals(cox7, type="martingale")
+# 
+# # Cum. Hazard for cox-snell residual
+# cox7.cs.surv <- Surv(cox7.cs, std$rinfct)
+# cox7.cs.fit <- survfit(cox7.cs.surv~1,type="fleming-harrington")
+# 
+# plot(cox7.cs.fit, fun="cumhaz", xlab="Cox-Snell Residuals", ylab="Cumulative Hazard")
+# abline(0,1, col=2, lwd=2, lty=2)
+# title("Cum. Hazard of Cox-Snell Residuals, strata condom&iinfct")
+# 
+# plot(cox6.cs.fit, fun="cumhaz", xlab="Cox-Snell Residuals", ylab="Cumulative Hazard")
+# abline(0,1, col=2, lwd=2, lty=2)
+# title("Cum. Hazard of Cox-Snell Residuals")
+# 
+
+```
+
+```{r}
+# cox6b <- coxph(surv_object ~ iinfct + condom + vagina + yschool, data = std)
+# cox6b.cs <- std$rinfct-residuals(cox6b, type="martingale")
+# 
+# # Cum. Hazard for cox-snell residual
+# cox6b.cs.surv <- Surv(cox6b.cs, std$rinfct)
+# cox6b.cs.fit <- survfit(cox6b.cs.surv~1,type="fleming-harrington")
+# 
+# plot(cox6b.cs.fit, fun="cumhaz", xlab="Cox-Snell Residuals", ylab="Cumulative Hazard")
+# abline(0,1, col=2, lwd=2, lty=2)
+# title("Continuous yschool")
+# 
+# plot(cox6.cs.fit, fun="cumhaz", xlab="Cox-Snell Residuals", ylab="Cumulative Hazard")
+# abline(0,1, col=2, lwd=2, lty=2)
+# title("Categorical yschool")
+
+```
+
+
+```{r}
+# cox8 <- coxph(surv_object ~ iinfct + condom + vagina+cat_yschool+num_symptoms, data = std)
+# summary(cox8)
+```
+
+```{r}
+# cox.full <- coxph(surv_object~iinfct+marital+race+os12m+os30d+rs12m+rs30d+abdpain+ discharge+dysuria+condom+itch+lesion+rash+lymph+vagina+dchexam+abnode+age+cat_yschool+npartner+num_symptoms, data = std)
+# step.model <- stepAIC(cox.full, direction = "both", 
+#                       trace = FALSE)
+# step.model
+```
+
+
+
+## NEED TO CHANGE EVERYTHING FROM HERE DOWN.
+
+```{r}
+mres <- residuals(cox4, type = "martingale")
+yearslowess <- lowess(std$yschool,mres)
+{plot(std$yschool,mres,xlab="Years at School",ylab="Martingale Residuals")
+lines(yearslowess)
+title("Martingale Residuals vs. Years of School")}
+```
+
+```{r}
+mres1 <- residuals(cox2, type = "martingale")
+agelowess <- lowess(std$age,mres)
+{plot(std$age,mres1,xlab="age",ylab="Martingale Residuals")
+lines(agelowess)
+title("Martingale Residuals vs. Age")}
+```
+
+```{r}
+mres2 <- residuals(cox2, type = "martingale")
+nlowess <- lowess(std$npartner,mres)
+{plot(std$npartner,mres2,xlab="npartner",ylab="Martingale Residuals")
+lines(nlowess)
+title("Martingale Residuals vs. Number of Partners")}
+```
+
+
+```{r}
+KMcurves1 <- survfit(surv_object ~ dchexam, data = std)
+plot(KMcurves1, col = 1:2, main = "KM Curves for Discharge at Exam")
+```
+
+
+
+# Need to edit below now that we might be keeping condom.
+
+### (4) Run the usual suite of model checking methods and report any interesting findings. Possibly alter the model as a result.
+```{r}
+test.ph <- cox.zph(cox2)
+test.ph
+```
+```{r}
+plot(test.ph[1], main = "Schoenfeld Residuals for differernt initial infection types")
+```
+
+```{r}
+plot(test.ph[2], main = "Schoenfeld Residuals for whether vagina or not")
+```
+
+```{r}
+plot(test.ph[3], main = "Schoenfeld Residuals for whether discharge or not at exam")
+```
+
+```{r}
+plot(test.ph[4], main = "Schoenfeld Residuals for year at school")
+```
+
+
+```{r}
+correlations <- apply(X = test.ph$y, MARGIN = 2, FUN = function(x) {cor.test(x, test.ph$x, method = "spearman")})
+correlations
+```
+
+```{r}
+residuals <- residuals(cox2,type="martingale")
+
+add.cs <- as.numeric(std$rinfct)-residuals
+
+
+surv.csr <- survfit(Surv(add.cs,as.numeric(std$rinfct))~1,type="fleming-harrington")
+
+{plot(surv.csr,fun="cumhaz",xlab="Cox-snell residuals",ylab="Cumulative Hazard")
+abline(0,1)
+title("Cumulative Hazard of Cox-Snell Residuals")}
+```
+
+```{r}
+b.mart <- residuals(cox2,type="martingale")
+b.dev <- residuals(cox2,type="deviance")
+b.dfb <- residuals(cox2,type="dfbeta")
+
+b.preds <- predict(cox2)
+{plot(b.preds,b.mart,xlab="Linear Predictor",
+     ylab="Martingale Residual", ylim = c(-2,2), pch = 19, cex = 0.5)
+text(b.preds,b.mart)
+title("Martingale Residuals vs. Linear Predictor")}
+```
+
+```{r}
+{plot(b.preds,b.dev,xlab="Linear Predictor",ylab="Deviance Residual", 
+     ylim = c(-3,3), pch = 19, cex = 0.5)
+title("Deviance Residuals vs. Linear Predictor")
+text(b.preds,b.dev)}
+```
+
+```{r}
+{plot(b.dfb[,1],xlab="Observation Number",ylab="dfbeta for clinics", 
+     ylim=c(-.2,.2), pch = 19, cex = 0.5)
+text(b.dfb[,1])
+title("dfbeta Values by Observation Number for initial infection")}
+```
+
+```{r}
+{plot(b.dfb[,2],xlab="Observation Order",ylab="dfbeta for prison", pch = 19, cex = 0.5)
+text(b.dfb[,2]+.04)
+title("dfbeta Values by Observation Order for vigina or not")}
+```
+
+```{r}
+{plot(b.dfb[,3],xlab="Observation Order",ylab="dfbeta for catergorized methadone", pch = 19, cex = 0.5)
+text(b.dfb[,3]+.0005)
+title("dfbeta Values by Observation Order for discharge or not")}
+```
+
+
+```{r}
+{plot(b.dfb[,4],xlab="Observation Order",ylab="dfbeta for catergorized methadone", pch = 19, cex = 0.5)
+text(b.dfb[,4]+.0005)
+title("dfbeta Values by Observation Order for year at school")}
+```
+
+
+
+
+

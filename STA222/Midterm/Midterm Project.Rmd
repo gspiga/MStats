@@ -1,0 +1,270 @@
+---
+title: "Midterm Project"
+author: "Gianni Spiga"
+date: '2022-10-31'
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    df_print: paged
+---
+
+## Libraries
+```{r, message = FALSE, warning=FALSE}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(plotly)
+library(muhaz)
+library(ggthemes)
+```
+
+## Loading in Data 
+```{r}
+data(burn)
+
+burn1 <- burn
+burn1 <-
+  data.frame(burn1, Treatment = factor(burn1$Z1, labels = c("Routine", "Cleansing")))
+burn1 <-
+  data.frame(burn1, Gender = factor(burn1$Z2, labels = c("Male", "Female")))
+burn1 <-
+  data.frame(burn1, Race = factor(burn1$Z3, labels = c("Nonwhite", "White")))
+burn1 <- data.frame(burn1, PercentBurned = burn1$Z4)
+burn1 <-
+  data.frame(burn1, SiteHead = factor(burn1$Z5, labels = c("NotBurned", "Burned")))
+burn1 <-
+  data.frame(burn1, SiteButtock = factor(burn1$Z6, labels = c("NotBurned", "Burned")))
+burn1 <-
+  data.frame(burn1, SiteTrunk = factor(burn1$Z7, labels = c("NotBurned", "Burned")))
+burn1 <-
+  data.frame(burn1, SiteUpperLeg = factor(burn1$Z8, labels = c("NotBurned", "Burned")))
+burn1 <-
+  data.frame(burn1, SiteLowerLeg = factor(burn1$Z9, labels = c("NotBurned", "Burned")))
+burn1 <-
+  data.frame(burn1, SiteRespTract = factor(burn1$Z10, labels = c("NotBurned", "Burned")))
+burn1 <-
+  data.frame(burn1, BurnType = factor(burn1$Z11, labels = c("Chemical", "Scald", "Electric", "Flame")))
+
+burn1.surv <- with(burn1, Surv(T3, D3))
+# plot(survfit(burn1.surv ~ Treatment, data = burn1),
+#      col = 1:2,
+#      lwd = 2)
+# title("Time to Infection for Routine Care and Total Body Cleansing")
+# legend(
+#   "topright",
+#   c("Routine Care", "Total Body Cleansing"),
+#   col = 1:2,
+#   lwd = 2
+# )
+
+#Lets observe the data 
+burn1
+
+
+print(survdiff(burn1.surv ~ Treatment, data = burn1))
+
+```
+
+## Question 1
+
+```{r, warning = FALSE}
+# Plot the Kaplan Meier Curves 
+KMcurves <- survfit(burn1.surv ~ Treatment, data = burn1)
+
+KMplot <-
+  ggsurvplot(KMcurves, ggtheme = theme_fivethirtyeight()) + labs(title = "KM Curves for Time to Infection for Routine Care \n and Total Body Cleansing")
+ggplotly(KMplot[[1]])
+```
+
+## Question 2
+
+```{r}
+cumHazPlot <-
+  ggsurvplot(
+    KMcurves,
+    fun = "cumhaz",
+    conf.int = FALSE,
+    palette = c("#5d8aa8", "#e32636"),
+    ggtheme =theme_fivethirtyeight()
+  ) + ggtitle("Cumulative Hazard for Treatment Type")
+
+#ggplotly(cumHazPlot[[1]])
+
+#cumHazPlot
+ggplotly(cumHazPlot$plot) # + geom_abline())
+
+
+#Cloglog plot
+cLogLogPlot <-
+  ggsurvplot(
+    KMcurves,
+    fun = "cloglog",
+    palette = c("#5d8aa8", "#e32636"),
+    ggtheme = theme_fivethirtyeight()
+  ) + ggtitle("Complimentary Log-Log for Treatment") 
+ggplotly(cLogLogPlot[[1]])
+```
+
+### Question 3
+
+```{r}
+#Building with time independent objects
+survTimeIndep <- Surv(burn1$T3, burn1$D3)
+#Build a cox model with just treatment
+burn.cox.indep.T <- coxph(survTimeIndep ~ Treatment, data = burn1)
+summary(burn.cox.indep.T)
+
+
+#Building with treatement and burnpercentage
+# burn.cox.indep.TPB <- coxph(survTimeIndep ~ Treatment + PercentBurned, data = burn1)
+# summary(burn.cox.indep.TPB)
+
+#Building with treatement, burnpercentage, and burn Type 
+# burn.cox.indep.TPBbt <- coxph(survTimeIndep ~ Treatment + PercentBurned + BurnType, data = burn1)
+# summary(burn.cox.indep.TPBbt)
+
+
+#Building with treatement, burnpercentage, and burn Type + Respartory Tract
+# burn.cox.indep.TPBbtResp <- coxph(survTimeIndep ~ Treatment + PercentBurned + BurnType + SiteRespTract, data = burn1)
+# summary(burn.cox.indep.TPBbtResp)
+
+#Building with treatement, burnpercentage, and burn Type + resp Tract and gender
+# burn.cox.indep.TPBbtRespG <- coxph(survTimeIndep ~ Treatment + PercentBurned + BurnType + SiteRespTract + Gender, data = burn1)
+# summary(burn.cox.indep.TPBbtRespG)
+
+# Build a model with all of the above + race
+summary(coxph(survTimeIndep ~ Treatment + PercentBurned + BurnType + SiteRespTract + Gender + Race, data = burn1))
+
+
+# We can see from p-values that Treatment, Burn Type, and Race are the only variables with significance, so we will build a cox model using these
+burn.cox <- coxph(survTimeIndep ~ Treatment + BurnType + Race, data = burn1)
+summary(burn.cox)
+```
+
+LRT and Wald Test both provide evidence that there is a significant difference with patients with differrent treatments, burn types, and race. 
+
+### Question 4 
+
+  
+```{r}
+# We check Residuals
+
+#Schoenfield
+burn.zph <- cox.zph(burn.cox)
+
+
+ggcoxzph(
+  burn.zph[1],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8",
+)
+
+ggcoxzph(
+  burn.zph[2],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8",
+)
+
+ggcoxzph(
+  burn.zph[3],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8"
+)
+
+
+# Martingale Residuals 
+burn.mart<- residuals(burn.cox, type = "martingale")
+
+burn.lowess <- as.data.frame(lowess(burn1$T3, burn.mart))
+
+# Plot Martingale 
+ggplotly(
+  ggplot() + aes(burn1$T3, burn.mart) + geom_point(col = "#5d8aa8") + labs(x = "Time", y = "Martingale Residuals", title = "Martingale Residuals vs. Time till Infection with Straphylocous Aureaus") + geom_line(data = burn.lowess, aes(x = x, y = y), col = "#388E3C") + theme_fivethirtyeight()
+)
+
+# We can see that we need a transformation, so we use log time 
+burn.lowess.log <-  as.data.frame(lowess(log(burn1$T3), burn.mart))
+
+# Plot Martingale 
+ggplotly(
+  ggplot() + aes(log(burn1$T3), burn.mart) + geom_point(col = "#5d8aa8") + labs(x = "Time", y = "Martingale Residuals", title = "Martingale Residuals vs. Time till Infection with Straphylocous Aureaus") + geom_line(data = burn.lowess.log, aes(x = x, y = y), col = "#388E3C") + theme_fivethirtyeight()
+)
+
+# Let us make time categorical 
+burn1["CatTime"] <-
+  as.factor(cut(burn1$T3,
+      c(0, 49, 100),
+      labels = c("<50", "50+")))
+
+#Buld a new cox Model with new time variable 
+burn.cox.catTime <- coxph(survTimeIndep ~ Treatment + BurnType + Race + CatTime, data = burn1)
+summary(burn.cox.catTime)
+
+### DOES NOT CONVERGE
+```
+
+## Question 5
+```{r}
+# Now we add time dependent covariates
+burn.cox.TD <- coxph(survTimeIndep ~ Treatment + BurnType + Race + T1 + D1+T2+D2 , data = burn1)
+summary(burn.cox.TD)
+
+# We remove the ones that are not significant to the model
+# Now we add time dependent covariates
+burn.cox.TD <- coxph(survTimeIndep ~ Treatment + BurnType + Race + D2 , data = burn1)
+summary(burn.cox.TD)
+```
+
+## Question 6
+```{r}
+drop1(burn.cox.TD, test = "Chisq")
+
+# We check Residuals
+
+#Schoenfield
+burn.zph.TD <- cox.zph(burn.cox.TD)
+
+
+ggcoxzph(
+  burn.zph.TD[1],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8",
+)
+
+ggcoxzph(
+  burn.zph.TD[2],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8",
+)
+
+ggcoxzph(
+  burn.zph.TD[3],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8"
+)
+
+ggcoxzph(
+  burn.zph.TD[4],
+  se = FALSE,
+  font.main = 12,
+  ggtheme = theme_fivethirtyeight(),
+  point.col = "#5d8aa8"
+)
+
+```

@@ -1,0 +1,37 @@
+---
+title: "Homework 1"
+author: "Gianni Spiga"
+date: '2022-09-28'
+output: html_document
+---
+
+```{r, message = FALSE}
+library(plotly)
+```
+
+```{r}
+# Create a list of values for n
+nlist <- c(seq(10, 200, 5))
+
+# We simulate using the Gamma distribution
+gammadf <- data.frame(nlist, unlist(lapply(nlist, function(x) pgamma(q = 1,shape=30,rate=x*.25))))
+names(gammadf) <- c("n", "Probability")
+
+# We simulate using the Poisson 
+poisdf <- data.frame(nlist, unlist(lapply(nlist, function(x) qpois(0.95,x*.25*1,lower=F))))
+names(poisdf) <- c("n", "Failures")
+#poisdf
+#gammadf
+```
+
+```{r, message = FALSE}
+
+figGAMMA <- plot_ly(data = gammadf, x = ~n, y = ~Probability) %>% layout(title = "Estimating Probability of At Least 30 Failures with Gamma Distribution") 
+#fig <- fig %>% add_trace(x = nlist[gammadf[,2] > 0.95][1], y =gammadf[,2][gammadf[,2] > 0.95][1])
+figGAMMA
+
+
+figPOIS <- plot_ly(data = poisdf, x = ~n, y = ~Failures) %>% layout(title = "Estimating At Least 30 Failures with Poission Distribution") 
+figPOIS
+```
+We can see that from both figures, that a sample size of 160 is the optimal choice for having a 95% chance of at least 30 failures. We can see that the Poisson distribution has a very linear relationship between sample size and the amount of failed disks. Meanwhile, the gamma distribution's relationship between sample size and probability of at least 30 failures is a sigmoidal curve.  

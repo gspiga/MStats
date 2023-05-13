@@ -1,0 +1,162 @@
+---
+title: "Homework 2"
+author: "Gianni Spiga"
+date: "2022-10-08"
+output: html_document
+---
+
+## Question 1
+
+$$ 
+V = \sum^\infty_{t = 1} \frac{M}{(1 + i) ^t}\prod ^{t-1}_{s=0}P(A + S)
+$$ 
+```{r}
+# First year
+Pmaledies80 <- 0.056237
+Pfemdies75 <- 0.024080
+
+Patleastone <- 1 - (Pmaledies80 * Pfemdies75)
+
+V1 = 1000 / (1.05) * Patleastone
+V1
+```
+
+```{r}
+# Second Year
+Pmaledies81 <- 0.062360
+Pfemdies76 <- 0.026831
+
+# Case 1, both survive 2 years
+PbothSurv2 <-
+  (1 - Pmaledies80) * (1 - Pmaledies81) * (1 - Pfemdies75) * (1 - Pfemdies76)
+
+
+#Case 2, Fem lives 2 years, males dies year 1
+Pfem2male1 <- Pmaledies80 * (1 - Pfemdies75) * (1 - Pfemdies76)
+
+# Case 3 Fem lives 2, male dies year 2
+Pfem2male2 <- (1 - Pmaledies80) * (Pmaledies81) * (1 - Pfemdies75) * (1 - Pfemdies76)
+
+#Case 4 Male survives 2 years, fem dies year 1 
+Pmale2fem1 <- (1 - Pmaledies80) * (1 - Pmaledies81) * (Pfemdies75)
+
+#Case 5 Male survies 2 years, fem dies year 2
+Pmale2fem2 <- (1 - Pmaledies80) * (1 - Pmaledies81) * (1 - Pfemdies75) * (Pfemdies76)
+
+
+V2 <-
+  (1000 / (1.05) ^ 2) * (PbothSurv2 + Pfem2male1 + Pfem2male2 + Pmale2fem1 + Pmale2fem2)
+V2
+```
+
+```{r}
+#Value after 2 years
+V1 + V2
+```
+
+## Question 2
+
+```{r, message = FALSE, warning=FALSE}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(plotly)
+library(muhaz)
+```
+
+a.)
+
+```{r}
+data(tongue)
+head(tongue)
+
+survival <- Surv(time = tongue$time, event = tongue$delta)
+
+KMcurves <- survfit(survival ~ type, data = tongue)
+
+KMplot <- ggsurvplot(KMcurves) + labs(title = "KM Curves with Censor Marks")
+
+KMplotCI <- ggsurvplot(KMcurves, conf.int = 0.95) + labs(title = "KM Curves with Censor Marks")
+
+ggplotly(KMplot[[1]])
+
+#Plotly does not have ggplot confidence intervals built in yet
+KMplotCI 
+```
+
+b.)
+```{r}
+survdiff(survival ~ type, data = tongue)
+```
+
+At $\alpha = 0.05$, we can conclude that there is not a significant difference between Aneuploed Tumors and Diploid Tumors. However since our p-value is only 0.09, at $\alpha = 0.1$, we would reject $H_0$, concluding there is a significant difference. Given these conflicting results, it would be advisable to collect more data to get a more accurrate idea of the true difference between Aneuploed and Diploid tumors. 
+
+c.) 
+````{r}
+NAcurves <-
+  survfit(survival ~ type, type = "fleming-harrington", data = tongue)
+
+NAplot <-
+  ggsurvplot(NAcurves) + labs(title = "NA Curves with Censor Marks")
+ggplotly(NAplot[[1]])
+
+fit <- list(NelAal = NAcurves, KapMei = KMcurves)
+
+#Comparison of KM versus NA
+# https://stackoverflow.com/questions/64749137/merge-two-kaplan-meier-curve-with-ggsurvplot
+compPlot <-
+  ggsurvplot_combine(fit, data = tongue) + labs(title = "Comparison of Nelson-Aalen Curves to Kaplan-Meier")
+ggplotly(compPlot[[1]])
+```
+We can see from the combined plot of the Nelson-Aalen Curves and the Kaplan-Meier curves that the prior (NA) predicts higher probability of survival through time than the Kaplan-Meier curves. 
+
+d.)
+```{r}
+timevec <- 1:1000
+
+#First hazard
+sf1 <- stepfun(NAcurves[1]$time, c(1, NAcurves[1]$surv))
+
+#Second Hazard
+sf2 <- stepfun(NAcurves[2]$time, c(1, NAcurves[2]$surv))
+
+#Cumulative hazard
+cumhaz1 <- -log(sf1(timevec))
+cumhaz2 <- -log(sf2(timevec))
+
+#Cumulative Hazard
+# ggplotly(
+#   ggplot() + aes(x = timevec, y = cumhaz1) + geom_line(color = "#581845") + ggtitle("Hazard Ratio for Type of Tumor")
+# )
+
+#Cumulative Hazard plot
+cumHazPlot <-
+  ggsurvplot(
+    NAcurves,
+    fun = "cumhaz",
+    palette = c("#581845", "#FFC300"),
+    ggtheme = theme_light()
+  ) + ggtitle("Cumulative Hazard for Aneuploid and Diploid Tumors")
+ggplotly(cumHazPlot[[1]])
+
+#Hazard Ratio
+ggplotly(
+  ggplot(ggtheme = theme_light()) + aes(x = timevec, y = cumhaz1 / cumhaz2) + geom_line(color = "#FF5733") + ggtitle("Hazard Ratio for Type of Tumor")
+)
+
+# Smoothed Hazard
+fit1 <- muhaz(tongue$time, tongue$delta, tongue$type == 1)
+fit2 <- muhaz(tongue$time, tongue$delta, tongue$type == 2)
+
+#Smoothed Hazard Rates Plots
+ggplotly(
+  ggplot()  + geom_line(aes(
+    x = fit1$est.grid, y = fit1$bw.loc.sm, color = "Aneuploid"
+  )) + geom_line(aes(
+    x = fit2$est.grid, y = fit2$bw.loc.sm, color = "Diploid"
+  )) + labs(title = "Smoothed Hazard Rate Type of Tumor") + xlab("Follow-Up Time") + ylab("Hazard Rate") + scale_color_manual(name = "Tumor Type", values= c("Aneuploid" = "#FF5733", "Diploid" = "#C70039"))
+)
+```
+Given the plots, it does appear that the hazard rates for these two tumor types are proportional. While at the beginning there is a lot of rapid change in the Hazard Ratio, over time we see the ratio between the two hazard rates stays constant. 

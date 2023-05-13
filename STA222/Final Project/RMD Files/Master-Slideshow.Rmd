@@ -1,0 +1,460 @@
+---
+title: "Analysis on Reinfection of Sexually Transmitted Diseases"
+author: "Yichu Chen, Gu Gong, Kate Jones, Gianni Spiga"
+date: '2022-11-29'
+output:
+  slidy_presentation: 
+    highlight: "espresso"
+    df_print: paged
+  ioslides_presentation:
+    widescreen: yes
+---
+
+# Libraries Used
+
+- Our analysis for this presenation would not have been possible without these libaries: 
+
+```{r, message = FALSE, warning=FALSE}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(plotly)
+library(muhaz)
+library(ggthemes)
+library(plyr)
+library(tidyr)
+```
+
+```{r}
+data(std)
+std
+```
+
+```{r, echo=F}
+# Loading in data
+#data(std)
+std0 = std
+# Checking for NA Values in data set 
+any(is.na(std))
+
+factor.cols <-
+  c(
+    "race",
+    # Race (W=white, B=black)
+    "marital",
+    # Marital status (D=divorced / separated, M=married, S=single)
+    "iinfct",
+    # Initial infection (1= gonorrhea, 2=chlamydia, 3=both)
+    "os12m",
+    # Oral sex within 12 months (1=yes, 0=no)
+    "os30d",
+    # Oral sex within 30 days (1=yes, 0=no)
+    "rs12m",
+    # Rectal sex within 12 months (1=yes, 0=no)
+    "rs30d",
+    # Rectal sex within 30 days (1=yes, 0=no)
+    "abdpain",
+    # Presence of abdominal pain (1=yes, 0=no)
+    "discharge",
+    # Sign of discharge (1=yes, 0=no)
+    "dysuria",
+    # Sign of dysuria (1=yes, 0=no)
+    "condom",
+    # Condom use (1=always, 2=sometime, 3=never)
+    "itch",
+    # Sign of itch (1=yes, 0=no)
+    "lesion",
+    # Sign of lesion (1=yes, 0=no)
+    "rash",
+    # Sign of rash (1=yes, 0=no)
+    "lymph",
+    # Sign of lymph (1=yes, 0=no)
+    "vagina",
+    # Involvement vagina at exam (1=yes, 0=no)
+    "dchexam",
+    # Discharge at exam (1=yes, 0=no)
+    "abnode" # Abnormal node at exam (1=yes, 0=no)
+  )
+
+std[factor.cols] <- lapply(std[factor.cols], as.factor)
+
+#lapply(std, class)
+
+std$race <-
+  mapvalues(std$race,
+            from = c("W", "B"),
+            to = c("White", "Black"))
+std$marital <-
+  mapvalues(
+    std$marital,
+    from = c("D", "M", "S"),
+    to = c("Divorced/Separated", "Married", "Single")
+  )
+std$iinfct <-
+  mapvalues(
+    std$iinfct,
+    from = c("1", "2", "3"),
+    to = c("gonorrhea", "chlamydia", "both")
+  )
+std$condom <-
+  mapvalues(
+    std$condom,
+    from = c("1", "2", "3"),
+    to = c("always", "sometime", "never")
+  )
+
+
+# Building the Survival Object 
+#infect <- std$iinfct
+surv_object <- Surv(time = std$time, event = std$rinfct)
+```
+
+# Exploratory Data Analysis
+
+- Our first step is to visualize a few of the variables in our data: 
+
+```{r, echo = F}
+# ggplotly(
+#   ggplot(std, aes(x = iinfct, fill = iinfct)) +
+#     geom_bar(stat = "count", position = "dodge") +
+#     # scale_y_continuous(labels = function(x) paste0(x*100, "%")) +
+#     labs(title = "Number of Reinfection For Each Initial Infection Type",
+#          x = "Initial Infection Type", y = "Count")
+# )
+```
+
+- Below we create two pie charts. The first shows the percentages for each type of initial infection. The second shows the percentages for the number of partners each patient had. 
+
+```{r, echo = F}
+fig1 <-
+  plot_ly(
+    data = data.frame(table(std$iinfct)),
+    labels = ~ Var1,
+    values = ~ Freq,
+    type = 'pie'
+  )
+fig1 <-
+  fig1 %>% layout(
+    title = "Percentage of Infection Type",
+    xaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    ),
+    yaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    )
+  )
+fig1
+
+fig2 <-
+  plot_ly(
+    data = data.frame(table(std$npartner)),
+    labels = ~ Var1,
+    values = ~ Freq,
+    type = 'pie'
+  )
+fig2 <-
+  fig2 %>% layout(
+    title = "Number of Partners",
+    xaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    ),
+    yaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    )
+  )
+fig2
+```
+- We also are interested in the frequency of symptoms for each patient, relative to their initial infection. 
+
+```{r, echo = F, message = F}
+# From some_eda1 file
+std0 = std0[which(std0$rinfct == "1"), ]
+std0$iinfct <-
+  mapvalues(
+    std0$iinfct,
+    from = c("1", "2", "3"),
+    to = c("gonorrhea", "chlamydia", "both")
+  )
+# Symptom Percentages based on Initial Infection
+
+symptoms <-
+  c("itch",
+    "lesion",
+    "rash",
+    "lymph",
+    "abdpain",
+    "discharge",
+    "dysuria")
+ii_sub1 <- std0[which(std0$iinfct == "gonorrhea"), symptoms]
+ii_sub2 <- std0[which(std0$iinfct == "chlamydia"), symptoms]
+ii_sub3 <- std0[which(std0$iinfct == "both"), symptoms]
+
+ii_sub1 <- colSums((ii_sub1)) / nrow(ii_sub1)
+ii_sub2 <- colSums((ii_sub2)) / nrow(ii_sub2)
+ii_sub3 <- colSums((ii_sub3)) / nrow(ii_sub3)
+
+ii_sub1["infection"] = "gonorrhea"
+ii_sub2["infection"] = "chlamydia"
+ii_sub3["infection"] = "both"
+
+ii_symptom <- as.data.frame(rbind(ii_sub1, ii_sub2, ii_sub3))
+
+ii_symptom_long <-
+  pivot_longer(ii_symptom,
+               !infection,
+               names_to = "Symptom",
+               values_to = "percentage")
+ii_symptom_long$percentage <- as.numeric(ii_symptom_long$percentage)
+
+
+ggplotly(
+  ggplot(ii_symptom_long, aes(
+    x = infection, y = percentage, fill = Symptom
+  )) +
+    geom_col(position = "dodge") +
+    scale_y_continuous(
+      labels = function(x)
+        paste0(x * 100, "%")
+    ) +
+    labs(title = "Distribution of Symptoms For Three Initial Infection Types",
+         x = "Initial Infection Type", y = "Percentage")
+)
+```
+
+- We can see that discharge is seen the most, regardless of infection type. Those with just gonorrhea did not experience any symptoms related to their lymph nodes. Those with both chlamydia and gonorrhea did not experience any rash.  
+
+# Checking Proportionality 
+
+- In order to build Cox model, we need to check that the data meets our proportional hazards assumptions. We will check this with *Kaplan-Meier Curves* and *Hazard Ratios*.
+
+## Kaplan-Meier Curves 
+
+```{r, echo = F, warning = F}
+KMobj <- survfit(surv_object ~ iinfct, data = std)
+KMplot <-
+  ggsurvplot(KMobj,
+             palette = c("#daed64", "#6495ed", "#ed7864"),
+             ggtheme = theme_fivethirtyeight()) + labs(title = "Kaplan-Meier Curves for Initial Infection Type")
+ggplotly(KMplot[[1]])
+survdiff(surv_object ~ iinfct, data = std)
+```
+- Since we see no intersection in our Kaplan-Meier Curves over time for each type of initial infection, we can concur proportional hazards hold. 
+
+## Hazard Ratios 
+```{r, echo = F}
+timevec <- 1:1500
+
+#First hazard (Gonorrhea)
+sf1 <- stepfun(KMobj[1]$time, c(1, KMobj[1]$surv))
+
+#Second hazard (Chlamydia)
+sf2 <- stepfun(KMobj[2]$time, c(1, KMobj[2]$surv))
+
+#Third hazard (Both)
+sf3 <- stepfun(KMobj[3]$time, c(1, KMobj[3]$surv))
+
+#now we can find the cumulative hazards
+cumhaz1 <- -log(sf1(timevec))
+cumhaz2 <- -log(sf2(timevec))
+cumhaz3 <- -log(sf3(timevec))
+
+#Hazard Ratio
+ggplotly(
+  ggplot(ggtheme = theme_fivethirtyeight()) + aes(x = timevec) + geom_line(aes(y = cumhaz1 / cumhaz2), col = "#daed64") + geom_line(aes(y = cumhaz3 / cumhaz1), col = "#6495ed") + geom_line(aes(y = cumhaz3 / cumhaz2), col = "#ed7864") +  labs(x = "Time", y = "Hazard Ratio", title = "Hazard Ratios for Three Initial Infections")
+)
+```
+## Cumulative Hazards and CLogLog
+
+```{r, echo = F, warning = F}
+# {plot(survfit(surv_object ~ iinfct, data = std),col=4:6,lwd=1,fun="cumhaz")
+# title("Cumulative Hazard for intital infection")
+# legend("topleft",c("gonorrhea","chlamydia","both"),col=4:6,lwd=1)}
+
+# Interactive plot 
+# Cumulative Hazard 
+cumHazPlot <-
+  ggsurvplot(
+    KMobj,
+    fun = "cumhaz",
+    conf.int = FALSE,
+    palette = c("#daed64", "#6495ed", "#ed7864"),
+    ggtheme =theme_fivethirtyeight()
+  ) + ggtitle("Cumulative Hazard for Initial Infection Type")
+
+ggplotly(cumHazPlot$plot)
+
+
+# Complimentary Log-Log 
+cLogLogPlot <-
+  ggsurvplot(
+    KMobj,
+    fun = "cloglog",
+    palette = c("#daed64", "#6495ed", "#ed7864"),
+    ggtheme = theme_fivethirtyeight()
+  ) + ggtitle("Complimentary Log-Log for Initial Infection Type") 
+
+ggplotly(cLogLogPlot[[1]])
+```
+
+# Schoenfield Residuals for Initial Infection
+
+- P-value here is large, so we do not have a violation of proportional hazards.
+
+```{r, echo = F}
+cox <- coxph(surv_object ~ iinfct, data = std)
+summary(cox)
+hodg.zph <- cox.zph(cox)
+# plot(hodg.zph, main = "Schoenfeld Residuals for Initial Infection Type")
+
+#For initial infection
+ggcoxzph(hodg.zph[1], se = FALSE, font.main = 12, ggtheme = theme_fivethirtyeight(), point.col = "#6495ed")
+```
+
+# Finding the Best Model
+
+## The Full model 
+- To better understand the influences on reinfection, we build a cox Proportional Hazard Model with all of the variables in the data 
+```{r, echo = T}
+cox1 <-
+  coxph(
+    surv_object ~ iinfct + marital + race + os12m + os30d +
+      rs12m + rs30d + abdpain + discharge + dysuria + condom + 
+      itch + lesion + rash + lymph + vagina + dchexam + abnode +
+      age + yschool + npartner,
+    data = std
+  )
+```
+- We then use the drop1() function to examine how the dropping of each variable influences the AIC of the model. 
+```{r, echo = F}
+#summary(cox1)
+drop1(cox1, test = "Chisq")
+```
+
+
+## Simplifying the Model
+
+- From here, the goal is to remove extraneous variables and include models that are statistically significant and lower the AIC of the model. 
+- We considered stratification, however, we found no signficant difference between a stratified and non-stratifed model via the Cox Snell Residuals, which measure the overall fit of a Cox model. This coincides with our conclusion earlier that the proportional hazards assumption was not violated. 
+
+```{r, echo = F}
+############### THE FINAL MODEL #####################
+# cox.model = coxph(surv_object ~ iinfct+condom+vagina+cat_yschool+os30d+abdpain, data = std)
+# summary(cox.model)
+#####################################################
+```
+
+- We find that the best model is ----- , how did we get here? 
+
+# Residuals
+
+## Martingale 
+
+### Transformation to a Categorical Variable
+
+```{r, echo = F, warning = F}
+cox.modelNoSchool <- coxph(surv_object ~ iinfct+condom+vagina+os30d+abdpain, data = std)
+martNoSchool <- residuals(cox.modelNoSchool, type = "martingale")
+
+# We plot martingale residuals to see if transformation is appropriate 
+lowessOBJ <- as.data.frame(lowess(std$yschool, martNoSchool))
+
+ggplotly(
+  ggplot() + aes(std$yschool, martNoSchool) + geom_point() + 
+    labs(x = "Years of School", y = "Martingale Residuals", title = "Martingale Residuals vs. Years of School") + 
+    geom_line(data = lowessOBJ, aes(x = x, y = y), col = "#6495ed") + geom_vline(xintercept = 9, color = "red") + 
+    geom_vline(xintercept = 12, colour = "red")
+)
+
+cat_yschool = cut(std$yschool,
+                  c(-Inf, 8, 12, Inf),
+                  labels = c("6-8", "9-12", "above 12"))
+std['cat_yschool'] = cat_yschool
+
+# re-level to use "9-12" as the reference group since it's survival curve is in between the other two groups
+
+std$cat_yschool = relevel(std$cat_yschool, ref="9-12")
+```
+
+
+```{r, echo = F}
+# For the rest of the analysis.. 
+
+############### THE FINAL MODEL #####################
+cox.model = coxph(surv_object ~ iinfct+condom+vagina+cat_yschool+os30d+abdpain, data = std)
+#summary(cox.model)
+#####################################################
+
+# Create residuals 
+b.mart <- residuals(cox.model,type="martingale")
+b.dev <- residuals(cox.model,type="deviance")
+b.dfb <- residuals(cox.model,type="dfbeta")
+
+b.preds <- predict(cox.model)
+```
+
+```{r, echo = F}
+#MArtingale vs Linear Predictor
+ggplotly(
+  ggplot() + aes(
+    x = b.preds,
+    y = b.mart,
+    label = std$obs
+  ) + geom_point() + labs(x = "Linear Predictor", y = "Martingale Residual", title = "Martingale Residuals vs Linear Predictor")
+)
+```
+
+## dfBeta 
+```{r, echo = F}
+# years of school categorical 
+figdfb1 <- ggplotly(
+  ggplot() + aes(
+    x = std$obs,
+    y = b.dfb[, 4],
+    text = paste("Obs:", std$obs, "\ndfBeta:", round(b.dfb[, 4], 4))
+  ) + geom_point() + labs(x = "Observation Number", y = "Years of School (Categorical)", title = "dfbeta Values for Years of School (Categorical)"),
+  tooltip = "text"
+)
+
+# Oral Sex 30
+figdfb2 <- ggplotly(
+  ggplot() + aes(
+    x = std$obs,
+    y = b.dfb[, 5],
+    text = paste("Obs:", std$obs, "\ndfBeta:", round(b.dfb[, 5], 4))
+  ) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Oral Sex in the Past 30 Days", title = "dfbeta Values for Oral Sex in the Past 30 Days"),
+  tooltip = "text"
+)
+
+# Abdominal Sex
+figdfb3 <- ggplotly(
+  ggplot() + aes(
+    x = std$obs,
+    y = b.dfb[, 6],
+    text = paste("Obs:", std$obs, "\ndfBeta:", round(b.dfb[, 6], 4))
+  ) + geom_point() + labs(x = "Observation Number", y = "dfbeta for Abdominal Pain", title = "dfbeta Values for Presence of Abdominal Pain"),
+  tooltip = "text"
+)
+```
+
+# Outliers 
+
+# In Conclusion 
+
+## Our Best Model 
+
+```{r, echo = F}
+############### THE FINAL MODEL #####################
+cox.model = coxph(surv_object ~ iinfct+condom+vagina+cat_yschool+os30d+abdpain, data = std)
+summary(cox.model)
+#####################################################
+```

@@ -1,0 +1,484 @@
+## Appendix
+
+```{r}
+library(survival)
+library(KMsurv)
+library(ggplot2)
+library(ggpubr)
+library(survminer)
+library(muhaz)
+library(plyr)
+library(plotly)
+library(ggthemes)
+library(MASS)
+```
+
+```{r}
+# Loading in data
+data(std)
+# Checking for NA Values in data set 
+any(is.na(std))
+
+
+
+# add number of symptoms column
+symptoms <- c("itch","lesion","rash","lymph", "abdpain","discharge","dysuria")
+num_symptoms = rowSums(std[,symptoms])
+num_symptoms <-
+  mapvalues(
+    num_symptoms,
+    from = c(0,1,2,3,4,5),
+    to = c("No Symptom","Has Symptom","Has Symptom","Has Symptom","Has Symptom","Has Symptom")
+  )
+std["num_symptoms"] = num_symptoms
+std$num_symptoms = as.factor(std$num_symptoms)
+std$num_symptoms = relevel(std$num_symptoms, ref="Has Symptom")
+
+
+
+
+factor.cols <-
+  c(
+    "race",
+    # Race (W=white, B=black)
+    "marital",
+    # Marital status (D=divorced / separated, M=married, S=single)
+    "iinfct",
+    # Initial infection (1= gonorrhea, 2=chlamydia, 3=both)
+    "os12m",
+    # Oral sex within 12 months (1=yes, 0=no)
+    "os30d",
+    # Oral sex within 30 days (1=yes, 0=no)
+    "rs12m",
+    # Rectal sex within 12 months (1=yes, 0=no)
+    "rs30d",
+    # Rectal sex within 30 days (1=yes, 0=no)
+    "abdpain",
+    # Presence of abdominal pain (1=yes, 0=no)
+    "discharge",
+    # Sign of discharge (1=yes, 0=no)
+    "dysuria",
+    # Sign of dysuria (1=yes, 0=no)
+    "condom",
+    # Condom use (1=always, 2=sometime, 3=never)
+    "itch",
+    # Sign of itch (1=yes, 0=no)
+    "lesion",
+    # Sign of lesion (1=yes, 0=no)
+    "rash",
+    # Sign of rash (1=yes, 0=no)
+    "lymph",
+    # Sign of lymph (1=yes, 0=no)
+    "vagina",
+    # Involvement vagina at exam (1=yes, 0=no)
+    "dchexam",
+    # Discharge at exam (1=yes, 0=no)
+    "abnode" # Abnormal node at exam (1=yes, 0=no)
+  )
+std[factor.cols] <- lapply(std[factor.cols], as.factor)
+#lapply(std, class)
+std$race <-
+  mapvalues(std$race,
+            from = c("W", "B"),
+            to = c("White", "Black"))
+std$marital <-
+  mapvalues(
+    std$marital,
+    from = c("D", "M", "S"),
+    to = c("Divorced/Separated", "Married", "Single")
+  )
+std$iinfct <-
+  mapvalues(
+    std$iinfct,
+    from = c("1", "2", "3"),
+    to = c("gonorrhea", "chlamydia", "both")
+  )
+std$condom <-
+  mapvalues(
+    std$condom,
+    from = c("1", "2", "3"),
+    to = c("always", "sometime", "never")
+  )
+
+# Building the Survival Object 
+infect <- std$iinfct
+surv_object <- Surv(time = std$time, event = std$rinfct)
+```
+
+### Exploratory Data Analysis
+
+Take a look at correlation between symptoms and different infection types.
+
+Is it more common for one type of infection based on type of sex (oral/anal).
+
+```{r}
+fig1 <-
+  plot_ly(
+    data = data.frame(table(std$iinfct)),
+    labels = ~ Var1,
+    values = ~ Freq,
+    type = 'pie'
+  )
+fig1 <-
+  fig1 %>% layout(
+    title = "Percentage of Infection Type",
+    xaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    ),
+    yaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    )
+  )
+fig1
+fig2 <-
+  plot_ly(
+    data = data.frame(table(std$npartner)),
+    labels = ~ Var1,
+    values = ~ Freq,
+    type = 'pie'
+  )
+fig2 <-
+  fig2 %>% layout(
+    title = "Number of Partners",
+    xaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    ),
+    yaxis = list(
+      showgrid = FALSE,
+      zeroline = FALSE,
+      showticklabels = FALSE
+    )
+  )
+fig2
+```
+
+### Kaplan-Meier Curves 
+```{r}
+KMobj <- survfit(surv_object ~ iinfct, data = std)
+KMplot <- ggsurvplot(KMobj) + labs(title = "Kaplan-Meier Curves for Initial Infection Type") 
+ggplotly(KMplot[[1]])
+```
+
+### Kaplan-Meier Curves differences by actual numbers 
+
+```{r}
+print(survdiff(surv_object ~ iinfct, data = std))
+```
+
+
+### Plot the cumulative hazards vs. time and the complimentary log-log survival vs. log time.
+
+```{r}
+{plot(survfit(surv_object ~ iinfct, data = std),col=4:6,lwd=1,fun="cumhaz")
+title("Cumulative Hazard for intital infection")
+legend("topleft",c("gonorrhea","chlamydia","both"),col=4:6,lwd=1)}
+```
+
+```{r}
+NAcurves <- survfit(surv_object ~ iinfct, data = std,type="fleming-harrington")
+{plot(NAcurves,col=1:3,lwd=2,fun="cloglog", ylab = "ln[H(t)]", xlab = "ln(t)")
+title("Complimentary log-log survival vs. log time")
+legend("bottomright",c("gonorrhea","chlamydia","both"),col=1:3,lwd=2)}
+```
+
+
+# Add hazard ratio plot.
+ 
+ 
+```{r}
+cox <- coxph(surv_object ~ iinfct, data = std)
+summary(cox)
+hodg.zph <- cox.zph(cox)
+plot(hodg.zph, main = "Schoenfeld Residuals for Initial Infection Type")
+test.ph <- cox.zph(cox)
+test.ph
+```
+
+P-value here is large, so we do not have a violation of proportional hazards.
+
+```{r}
+cox1 <- coxph(surv_object~iinfct+marital+race+os12m+os30d+rs12m+rs30d+abdpain+ discharge+dysuria+condom+itch+lesion+rash+lymph+vagina+dchexam+abnode+age+yschool+npartner, data = std)
+summary(cox1)
+drop1(cox1,test = "Chisq")
+```
+
+Drop test indicates that condom may also be significant.  
+
+```{r}
+cox2<- coxph(surv_object ~ iinfct+condom+vagina+dchexam+yschool, data = std)
+summary(cox2)
+```
+```{r}
+cox3<- coxph(surv_object ~ iinfct+vagina+dchexam+yschool, data = std)
+summary(cox3)
+```
+```{r}
+
+AIC(cox2)
+
+AIC(cox3)
+
+# AIC indicates that the model with condom is a better fit.
+
+std$condom <-
+  mapvalues(
+    std$condom,
+    from = c("always", "sometime", "never"),
+    to = c("use", "use", "never")
+  )
+
+cox4<- coxph(surv_object ~ iinfct+condom+vagina+dchexam+yschool, data = std)
+summary(cox4)
+drop1(cox4)
+
+AIC(cox4)
+
+# AIC is also now lower, so this will be our model.
+
+```
+
+
+## CODE BELOW: categorical version of yschool and cox5
+```{r}
+cat_yschool = cut(std$yschool, c(-Inf, 8, 12, Inf), labels = c("6-8","9-12","above 12"))
+std['cat_yschool'] = cat_yschool
+
+# re-level to use "8-12" as the reference group since it's survival curve is in between the other two groups
+
+std$cat_yschool = relevel(std$cat_yschool, ref="9-12")
+```
+
+```{r}
+# cox5 <- coxph(surv_object ~ iinfct+condom+vagina+dchexam+cat_yschool, data = std)
+# 
+# summary(cox5)
+```
+
+
+In cox6 the "discharge at exam" is dropped.
+
+```{r}
+# cox6 <- coxph(surv_object ~ iinfct+condom+vagina+cat_yschool, data = std)
+# summary(cox6)
+```
+
+```{r}
+
+# cox6.zph <- cox.zph(cox6)
+# 
+# plot(cox6.zph[1], main="Schoenfeld Residual for Initial Infectoion")
+# 
+# plot(cox6.zph[2], main="Schoenfeld Residual for Condom Use")
+# 
+# plot(cox6.zph[3], main="Schoenfeld Residual for Involvement of Vagina Examination")
+# 
+# plot(cox6.zph[4], main="Schoenfeld Residual for Schooling Years")
+
+```
+
+
+```{r}
+KM_condom <- survfit(surv_object ~ condom, data = std)
+KM_condom_plot <- ggsurvplot(KM_condom) + labs(title = "Kaplan-Meier Curves for Condom Use") 
+KM_condom_plot
+```
+
+```{r}
+############### THE FINAL MODEL #####################
+cox.model = coxph(surv_object ~ iinfct+condom+vagina+dchexam+yschool, data = std)
+drop1(cox.model, test="Chisq")
+summary(cox.model)
+#####################################################
+```
+
+
+
+
+
+
+```{r}
+# Cox-Snell
+cox.cs <- std$rinfct-residuals(cox.model, type="martingale")
+
+# Cum. Hazard for cox-snell residual
+cox.cs.surv <- Surv(cox.cs, std$rinfct)
+cox.cs.fit <- survfit(cox.cs.surv~1,type="fleming-harrington")
+
+plot(cox.cs.fit, fun="cumhaz", xlab="Cox-Snell Residuals", ylab="Cumulative Hazard")
+abline(0,1, col=2, lwd=2, lty=2)
+title("Cumulative Hazard of Cox-Snell Residuals")
+```
+
+
+## NEED TO CHANGE EVERYTHING FROM HERE DOWN.
+
+
+### (4) Run the usual suite of model checking methods and report any interesting findings. Possibly alter the model as a result.
+```{r}
+test.ph <- cox.zph(cox.model)
+test.ph
+```
+
+From the output results, the P values of the three covariates are all greater than 0.05, indicating that each variable satisfies the PH test, and the overall test P value of the model 0.4 is not statistically significant, so we believe that the model as a whole satisfies the PH test.
+
+```{r}
+plot(test.ph[1], main = "Schoenfeld Residuals for differernt initial infection types")
+```
+
+```{r}
+plot(test.ph[2], main = "Schoenfeld Residuals for whether using condom or not")
+```
+
+```{r}
+plot(test.ph[3], main = "Schoenfeld Residuals for whether vagina involvement or not")
+```
+
+```{r}
+plot(test.ph[4], main = "Schoenfeld Residuals for wether discharge present or not at exam")
+```
+
+```{r}
+plot(test.ph[5], main = "Schoenfeld Residuals for schooling years")
+```
+
+```{r}
+# plot(test.ph[6], main = "Schoenfeld Residuals for whether having Presence of abdominal pain or not")
+```
+
+
+```{r}
+# correlations <- apply(X = test.ph$y, MARGIN = 2, FUN = function(x) {cor.test(x, test.ph$x, method = "spearman")})
+# correlations
+```
+
+And based on the correlation test, all variables induce no non-proportionality. That means we should include both variables in our model.
+
+```{r} 
+
+residuals <- residuals(cox.model,type="martingale")
+
+add.cs <- as.numeric(std$rinfct)-residuals
+
+
+surv.csr <- survfit(Surv(add.cs,as.numeric(std$rinfct))~1,type="fleming-harrington")
+
+{plot(surv.csr,fun="cumhaz",xlab="Cox-snell residuals",ylab="Cumulative Hazard")
+abline(0,1, col=2, lty=2, lwd=2)
+title("Cumulative Hazard of Cox-Snell Residuals")}
+```
+
+```{r}
+b.mart <- residuals(cox.model,type="martingale")
+b.dev <- residuals(cox.model,type="deviance")
+b.dfb <- residuals(cox.model,type="dfbeta")
+
+b.preds <- predict(cox.model)
+{plot(b.preds,b.mart,xlab="Linear Predictor",
+     ylab="Martingale Residual", ylim = c(-2,2), pch = 19, cex = 0.5)
+text(b.preds,b.mart)
+title("Martingale Residuals vs. Linear Predictor")}
+```
+
+```{r}
+{plot(b.preds,b.dev,xlab="Linear Predictor",ylab="Deviance Residual", 
+     ylim = c(-4,4), pch = 19, cex = 0.5)
+title("Deviance Residuals vs. Linear Predictor")
+text(b.preds,b.dev)}
+```
+
+```{r}
+{plot(b.dfb[,1],xlab="Observation Number",ylab="dfbeta for initial infection: chlamydia", 
+     ylim=c(-.05,.05), pch = 19, cex = 0.5)
+text(b.dfb[,1])
+title("dfbeta Values by Observation Number for initial infection: chlamydia")}
+```
+```{r}
+{plot(b.dfb[,2],xlab="Observation Number",ylab="dfbeta for initial infection: both", 
+     ylim=c(-.04,.04), pch = 19, cex = 0.5)
+text(b.dfb[,2])
+title("dfbeta Values by Observation Number for initial infection: both")}
+```
+
+```{r}
+{plot(b.dfb[,3],xlab="Observation Number",ylab="dfbeta for condom use", 
+     ylim=c(-.02,.02), pch = 19, cex = 0.5)
+text(b.dfb[,3])
+title("dfbeta Values by Observation Number for condom use")}
+```
+
+```{r}
+{plot(b.dfb[,4],xlab="Observation Order",ylab="dfbeta for involvement of vagina at exam", pch = 19, cex = 0.5, ylim = c(-0.06,0.06))
+text(b.dfb[,4])
+title("dfbeta Values by Observation Order for involvement of vagina at exam")}
+```
+
+```{r}
+{plot(b.dfb[,5],xlab="Observation Order",ylab="dfbeta for discharge at exam", pch = 19, cex = 0.5, ylim=c(-0.08,0.08))
+text(b.dfb[,5])
+title("dfbeta Values by Observation Order for discharge at exam")}
+```
+
+
+```{r}
+{plot(b.dfb[,6],xlab="Observation Order",ylab="dfbeta for years of school", pch = 19, cex = 0.5)
+text(b.dfb[,6])
+title("dfbeta Values by Observation Order for years of school")}
+```
+
+Based on the plot above, we can get that the outliers and influencial points in this data as below:
+
+Martingale Residuals - 690
+
+Deviance Residuals - No unusual point
+
+initial infection: chlamydia Influence - 366, 211
+
+initial infection: both Influence - 366
+
+condom use or not Influence - 525
+
+vagina involvement or not Influence - 831, 525, 11
+
+discharge at exam Influence - 831, 859, 154
+
+year at school Influence - 294, 525, 635, 743
+
+The most important observations to examine seem to be  366, 525, 831, 743
+
+```{r}
+unusualpts <- c(366, 525, 831)
+std[unusualpts,]
+```
+
+ * Patient 366: Had the worst type of initial infection (gonorrhea), used condom, and had relatively low schooling year (yschool=9), but was not reinfected after a long survival time (1439 days).    
+ 
+ * Patient 525: Had the second worst type of initial infection (gonorrhea and chlamydia), with vagina involvement during exam and had low schooling year (yschool=8), but was not reinfected after a long survival time (1005 days).    
+ 
+ * Patient 831: Had vagina involvement and no discharge at exam, but was not reinfected after a long survival time.   
+ 
+
+<!-- Based on the result, we can see that all of them are not having oral sex last 30 days and have a relatively high education level based on their year at school, which are indicators for not having reinfection of std. -->
+
+<!-- Person 66: gonorrhea, having Presence of abdominal pain, sometimes using condom -->
+
+<!-- Person 366: gonorrhea, sometimes using condom -->
+
+<!-- Person 93: both, having Presence of abdominal pain, always using condom -->
+
+<!-- Person 699: both, always using condom -->
+
+<!-- Person 41: 	chlamydia, always using condom, getting vagina involvement -->
+
+<!-- Person 473: chlamydia, sometimes using condom, getting vagina involvement -->
+
+
+
+
+
+
