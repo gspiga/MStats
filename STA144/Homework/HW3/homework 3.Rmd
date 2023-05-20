@@ -1,0 +1,254 @@
+---
+title: "Homework 3"
+author: "Gianni Spiga"
+date: "2023-05-20"
+output:
+  html_document:
+    df_print: paged
+    theme: flatly
+    code_folding: hide
+    toc: yes
+    toc_float: yes
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+# P1 Problem 1 Ch 4 Pg 155 (2nd edition)
+
+## a.
+
+**Estimate the proportion of time in television news broadcasts in your
+city that is devoted to sports.**
+
+We would use a ratio estimate since we are seeking to find the
+proportion of broadcasts of spots overall
+
+## b.
+
+**Estimate the average number of fish caught per hour for anglers
+visiting a lake in August.**
+
+Since we looking for the average number of fish, we can estimate with
+the regression estimate, where $y$ is the number of fish caught and $X$
+is the number of hours spent.
+
+## c. 
+**Estimate the average amount that undergraduate students at your
+university spent on textbooks in fall semester.**
+
+We would use regression estimation for this question, $y$ is number of
+textbooks and $X$ is cost.
+
+## d.
+
+**Estimate the total weight of usable meat (discarding bones, fat, and
+skin) in a shipment of chickens.**
+
+Since we are estimating the total, we could use the ratio of the totals
+of usable meat to total amount of chickens.
+
+# P2 Problem 3, Ch 4, Page 156
+
+## a.
+
+**Draw a scatterplot of y vs. x.**
+
+```{r}
+tree = data.frame(Diameter = c(12, 11.4, 7.9 , 9, 10.5, 7.9 , 7.3 , 10.2 , 11.7, 11.3, 5.7 , 8, 10.3, 12, 9.2, 8.5, 7, 10.7, 9.3, 8.2), Age = c(125, 119, 83, 85, 99, 117, 69, 133, 154, 168, 61, 80, 114, 147, 122, 106, 82, 88, 97, 99))
+tree
+
+library(ggplot2)
+ggplot(data = tree, aes(x = Diameter, y = Age)) + geom_point()
+```
+
+## b.
+
+**Estimate the population mean age of trees in the stand using ratio
+estimation and give an approximate standard error for your estimate** $$
+e_i = y_i - \hat{B}x_i \\ 
+\hat{V}(\hat{\bar{y}}) = (1 - \frac{n}{N})(\frac{\bar{x_U}}{\bar{x}})^2 \frac{s_e^2}{n}
+$$
+
+```{r}
+xbarU = 10.3
+Bhat = mean(tree$Age) / mean(tree$Diameter)
+ybar.ratio = Bhat * xbarU
+ybar.ratio 
+
+e.ratio = tree$Age -  Bhat * tree$Diameter
+
+ybar.ratio.error = sqrt((1 - 20 / 1132) * (xbarU / mean(tree$Diameter))^2 * var(e.ratio) / 20)
+ybar.ratio.error
+```
+
+## c. 
+
+** Repeat (b) using regression estimation. **
+
+```{r}
+bhat1 = cor(tree$Diameter, tree$Age) * sd(tree$Age)/sd(tree$Diameter)
+bhat0 = mean(tree$Age) - bhat1 * mean(tree$Diameter)
+ybar.reg = bhat0 + bhat1* xbarU
+ybar.reg
+
+
+e.reg = tree$Age -  (bhat0 + bhat1 * tree$Diameter)
+
+ybar.reg.error = sqrt((1 - 20 / 1132)  * var(e.reg) / 20)
+ybar.reg.error
+```
+
+## d. 
+**Label your estimates on your graph. How do they compare?**
+
+```{r}
+ggplot(data = tree, aes(x = Diameter, y = Age)) + geom_point() + geom_abline(slope = Bhat, intecept = 0, color = "red") + geom_abline(slope = bhat1, intercept = bhat0, color = "blue")
+```
+
+The Ratio (red) and Regression (blue) estimates are very similar. Either
+one would make sense for this data.
+
+# P3 Problem 11, Chapter 4, page 157
+
+## a.
+**Draw a histogram of the number of physicians for the 100 counties.**
+
+```{r}
+counties <- read.csv("counties.csv")
+head(counties)
+ggplot(data = counties, aes(x = physician)) + geom_histogram(bins = 10)
+```
+
+## b. 
+** Estimate the total number of physicians in the United States, along with its standard error, using Ny¯.**
+
+```{r}
+# Total number of counties
+N <- 3141
+est.total <- mean(counties$physician) * N
+est.total
+
+se.est.total <- N * sqrt((1 - 100/N) * var(counties$physician) / 100)
+se.est.total
+```
+
+## c. 
+
+**Plot the number of physicians vs. population for each county. Which method do you think is more appropriate for these data: ratio estimation or regression estimation?**
+
+```{r}
+ggplot(data = counties, aes(x = totpop, y = physician)) + geom_point()
+
+# Outlier, lets find it
+which.max(counties$totpop)
+counties[18,]
+
+# Cook county has really pop and physician count, we will plot without it 
+ggplot(data = counties[-18,], aes(x = totpop, y = physician)) + geom_point()
+```
+
+We can see (after removing the outlier) as the total population
+increases, the variablity in the number of physicians is also
+increasing, thus we should use ration estimation.
+
+## d. 
+**Using the method you chose in (c), use the auxiliary variable population to estimate.the total number of physicians in the United States, along with the standard error **
+
+```{r}
+# We know the ratio of means is equal to the ratio of totals
+bhat_phys <- mean(counties$physician) / mean(counties$totpop)
+bhat_phys
+
+tot.ratio <- bhat_phys * 255077536 # we use total population
+tot.ratio
+
+e.tot <- counties$physician  - bhat_phys * counties$totpop
+  
+tot.ratio.se <- N * sqrt((1- 100/N) * (255077536 / (N/100 * sum(counties$totpop)))^2* var(e.tot)/100)
+tot.ratio.se
+```
+
+## e. 
+**The "true" value for total number of physicians in the population is 532,638. Which method of estimation came closer?**
+
+We can see that our ratio estimate came much closer to the true value
+for total number of physicians then our simple total estimation.
+
+# P4 Problem 36, Ch 4, page 163
+
+## a
+
+** Generate 500 data sets, each with 30 pairs of observations (xi, yi). Use
+a bivariate normal distribution with means 0, standard deviations 1, and
+correlation 0.5 to generate each pair $(x_i, y_i)$. For each data set,
+calculate $\bar{y}$ and $\hat{\bar{y}}_{reg}$ y¯reg, using x¯U = 0.Graph
+a histogram of the 500 values of y¯ and another histogram of the 500
+values of ˆy¯reg. What do you see? ** 
+
+```{r}
+library(survey)
+library(MASS)
+set.seed(123)
+
+#Sample Size
+n <- 30
+
+#Sample from a multivariate normal with both means 0, both SDs 1, and 0.5 correlation
+my_sample <- mvrnorm(n, mu=c(0,0), Sigma=matrix(c(1,0.5,0.5,1), nrow=2, ncol=2))
+
+ybar_vec <- c()
+yreg_vec <- c()
+for (x in 1:500) {
+  my_sample <- mvrnorm(n, mu=c(0,0), Sigma=matrix(c(1,0.5,0.5,1), nrow=2, ncol=2))
+  ybar = mean(my_sample[,2])
+  
+  # regression estimate
+  Bhat1 = cor(my_sample[,1], my_sample[,2]) * sd(my_sample[,2]) / sd(my_sample[,1])
+  Bhat0 = mean(my_sample[,2]) - Bhat1 * mean(my_sample[,1])
+  
+  yreg = Bhat0 + Bhat1 * 0
+  
+  ybar_vec <- c(ybar_vec, ybar)
+  yreg_vec <- c(yreg_vec, yreg)
+}
+
+ggplot() + aes(x = ybar_vec) + geom_histogram(fill = "purple", alpha = 0.5, bins = 25) + geom_histogram(aes(x = yreg_vec), fill = "green", alpha = 0.5, bins = 25)
+```
+
+From the plot, we can see $\hat{\bar{y}}_{reg}$ estimates the true
+population mean more often with less variablity than the standard
+$\bar{y}$ estimate.
+
+## b
+
+```{r}
+#Sample Size
+n1 <- 60
+
+#Sample from a multivariate normal with both means 0, both SDs 1, and 0.5 correlation
+#my_sample <- mvrnorm(n, mu=c(0,0), Sigma=matrix(c(1,0.5,0.5,1), nrow=2, ncol=2))
+
+ybar_vec <- c()
+yreg_vec <- c()
+for (x in 1:500) {
+  my_sample <- mvrnorm(n1, mu=c(0,0), Sigma=matrix(c(1,0.5,0.5,1), nrow=2, ncol=2))
+  ybar = mean(my_sample[,2])
+  
+  # regression estimate
+  Bhat1 = cor(my_sample[,1], my_sample[,2]) * sd(my_sample[,2]) / sd(my_sample[,1])
+  Bhat0 = mean(my_sample[,2]) - Bhat1 * mean(my_sample[,1])
+  
+  yreg = Bhat0 + Bhat1 * 0
+  
+  ybar_vec <- c(ybar_vec, ybar)
+  yreg_vec <- c(yreg_vec, yreg)
+}
+
+ggplot() + aes(x = ybar_vec) + geom_histogram(fill = "firebrick", alpha = 0.5, bins = 25) + geom_histogram(aes(x = yreg_vec), fill = "dodgerblue", alpha = 0.5, bins = 25)
+
+```
+
+In this plot, we can see now with double the sample size, the estimation
+of the true mean from the regression estimate is even more frequent with
+even less variability than the standard measure of the mean.
