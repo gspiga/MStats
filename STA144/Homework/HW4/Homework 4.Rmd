@@ -1,0 +1,39 @@
+---
+title: "Homework 4"
+author: "Gianni Spiga"
+date: '2023-06-06'
+output:
+  html_document:
+    df_print: paged
+    theme: flatly
+    code_folding: hide
+    toc: yes
+    toc_float: yes
+---
+
+# P1: Problem 1, Chapter 5, page 207
+
+These results are not valid since they are clustering by household instead of phone number and collecting information about all eligible voters. So phone numbers and their respective households are most likely to respond the same. 
+
+# P2: Problem 2, Chapter 5, page 208
+
+## 2. 
+
+### a.
+
+This is a cluster sample because they are handing questionares to all the parents in a selected clinic. The *psu* are the clinics, and the *ssu* are the parents given a questionare. This would be one-stage sampling, since we are sampling the entirity of parents in the clinic.
+
+Assuming clusters are not equal sized, for binary data: 
+
+$$
+\hat{p}_{clu} =  \sum_{i \in S} t_i \\
+SE(\hat{p}_{clu}) = \frac{N}{K} \sqrt{(1 - \frac{n}{N})\frac{\hat{p}_{clu}(1 - \hat{p}_{clu})}{n-1}}
+$$
+### b. 
+
+The sampling population is parents who visit specific clinics within a week in Chicago. The sample is representative of the sampling population. 
+
+# P3 Problem 4, Chapter 5, page 208
+
+##
+
