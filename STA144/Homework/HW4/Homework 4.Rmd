@@ -25,10 +25,6 @@ This is a cluster sample because they are handing questionares to all the parent
 
 Assuming clusters are not equal sized, for binary data: 
 
-$$
-\hat{p}_{clu} =  \sum_{i \in S} t_i \\
-SE(\hat{p}_{clu}) = \frac{N}{K} \sqrt{(1 - \frac{n}{N})\frac{\hat{p}_{clu}(1 - \hat{p}_{clu})}{n-1}}
-$$
 ### b. 
 
 The sampling population is parents who visit specific clinics within a week in Chicago. The sample is representative of the sampling population. 
@@ -37,3 +33,10 @@ The sampling population is parents who visit specific clinics within a week in C
 
 ##
 
+# P7 Problem 9, Chapter 6, page 269
+
+```{r}
+states <- read.csv("statepps.csv")
+states
+
+```
