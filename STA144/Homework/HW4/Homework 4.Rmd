@@ -31,12 +31,220 @@ The sampling population is parents who visit specific clinics within a week in C
 
 # P3 Problem 4, Chapter 5, page 208
 
-##
+## a.
 
+This example is a cluster sample since we have a primary sampling unit and a secondary sampling unit, which are the journal and 1988 articles respectively. 
+
+## b. 
+
+```{r}
+journal <- read.csv("journal.csv")
+journal 
+
+sum_ti <- sum(journal$nonprob)
+sum_ti
+
+sum_Mi <- sum(journal$numemp)
+
+ybar_r <- sum_ti / sum_Mi
+ybar_r
+
+# Estimated variance to find std error
+var_j <- sum((journal$nonprob - ybar_r*journal$numemp)^2) / (nrow(journal) - 1)
+var_j
+
+sqrt((1 - 26/1285) * 1/(26*(5.69^2)) * var_j)
+```
+## c.
+
+While this statement may sound confidence if just observing the mean and the standard error for proportions, courts should proceed with great caution when and gather more evidence due to the large consequence in the risk of statistical error in legal proceedings.
+
+# P4 Problem 11, Chapter 5, page 210
+
+```{r}
+N_acc <- 828
+n_acc <- 85
+acc <- data.frame("Errors" = c(0,1,2,3,4), "Freq" = c(57,22,4,1,1))
+acc
+```
+# P5 Problem 14 Chapter 5, page 211
+
+## a. 
+
+```{r}
+ti_smo <- sum(c(316.8, 89.4, 153.3, 540))
+Mi_smo <- sum(c(792, 447, 511, 800))
+mi_smo <- c(25, 15 ,20 ,40)
+
+ybar_smo <- ti_smo/Mi_smo
+ybar_smo
+
+s2i_smo <- 1 / (mi_smo - 1) * sum()
+s2r_smo <- var(c(316.8, 89.4, 153.3, 540) - c(792, 447, 511, 800)*ybar_smo)
+sec_sum <- (1 - mi_smo/ c(792, 447, 511, 800)) * c(792, 447, 511, 800)^2
+
+
+se_smo <- 1 / (Mi_smo/4)^2 * sqrt((1 - 4/29) * s2r_smo/4)
+```
+
+# P6 Problem 16, chapter 5, page 212
+
+## a. 
+
+```{r}
+measles <- read.csv("measles.csv")
+measles
+
+library(dplyr)
+
+#measles <- measles %>% mutate(returnf = replace(returnf, returnf == 9, 0))
+measles <- measles %>% filter(returnf != 9)
+ #table(measles$school, measles$returnf)
+meas_sum <- measles %>% group_by(school) %>% summarise_each(list(sum))
+meas_sum
+
+meas_tab <- table(measles$school, measles$returnf)
+#ybar hat
+ybh <- meas_tab[,2] / rowSums(meas_tab)
+ybh
+```
+## b. 
+$$
+w_{ij} = \frac{NM_i}{nm_i} \ (5.19)
+$$
+
+```{r}
+# Correct
+# Mi/mi 
+Movm = unique(measles$Mitotal) / rowSums(meas_tab)
+
+#N/n = 46/10
+Novn <-  46/10
+
+wij <- Movm * Novn
+wij
+```
+## c.
+
+```{r}
+# From wrong problem
+# ti = sum Mi/mi yij = Mi ybar_i
+ti <- unique(measles$Mitotal) * ynh
+
+ybh_r <- sum(ti) / sum(unique(measles$Mitotal))
+ybh_r
+
+sum(unique(measles$Mitotal) * ybh) / sum(unique(measles$Mitotal)) * 100
+
+Mbar <-  sum(unique(measles$Mitotal)) / length(unique(measles$Mitotal))
+Mbar
+
+# Using formula 5.29
+sr <-
+  #1 / (10 - 1) * (ybh_r * sum(unique(measles$Mitotal)) - ybh * sum(unique(measles$Mitotal)
+  #sum())^2)
+sr
+sr
+SE_ybhr <- 1 / Mbar * (1 - 1/Novn) * 
+```
 # P7 Problem 9, Chapter 6, page 269
+
+## a.
 
 ```{r}
 states <- read.csv("statepps.csv")
 states
 
+### For land area
+set.seed(123)
+cumsumm_states <- cumsum(states$landarea)
+
+# Create range, LB and UB
+range_df <- data.frame(cumsumm_states -(states$landarea - 1), cumsumm_states)
+
+# Sample with replacement
+states_samp <- sample(1:sum(states$landarea), size = 10, replace = TRUE)
+#states_samp
+
+samp_clust <- c()
+for (i in 1:10){
+  x <- which(states_samp[i] > range_df[,1] & states_samp[i] < range_df[,2])
+  samp_clust <- c(samp_clust, x)
+}
+
+# These are our chosen samples
+states[samp_clust,]
+
+#psi_i
+psi_vector <- states$landarea / sum(states$landarea)
+psi_vector[samp_clust]
 ```
+
+## b. 
+
+```{r}
+### For population
+set.seed(456)
+cumsumm_states <- cumsum(states$pop2019)
+
+# Create range, LB and UB
+range_df <- data.frame(cumsumm_states -(states$pop2019 - 1), cumsumm_states)
+
+# Sample with replacement
+states_samp <- sample(1:sum(states$pop2019), size = 10, replace = TRUE)
+#states_samp
+
+samp_clust <- c()
+for (i in 1:10){
+  x <- which(states_samp[i] > range_df[,1] & states_samp[i] < range_df[,2])
+  samp_clust <- c(samp_clust, x)
+}
+
+# These are our chosen samples
+states[samp_clust,]
+
+#psi_i
+psi_vector <- states$pop2019 / sum(states$pop2019)
+psi_vector[samp_clust] 
+```
+## c. 
+
+Given our randomness, the one noticeable state that is shows up in both sample is Texas, which makes sense given its large size and large population. 
+
+# P8: Problem 10, chapter 6, page 269 
+
+## a.
+
+$$
+\hat{t}_{\psi} = \frac{1}{n}\sum_{i \in R} \frac{t_i}{\psi_i} \\
+\hat{V}(\hat{t}_{\psi}) = \frac{1}{n} \frac{1}{n- 1}\sum_{i \in R} \left(\frac{t_i}{\psi_i} - \hat{t}_{\psi}\right)^2
+$$
+
+```{r}
+that_psi = 1/10 * sum(states[samp_clust,]$counties / psi_vector[samp_clust])
+ceiling(that_psi)
+
+est_var_that_psi= (1 /10) * (1/9) *sum((states[samp_clust,]$counties / psi_vector[samp_clust] - that_psi)^2)
+sqrt(est_var_that_psi)
+
+# True value
+sum(states$counties)
+```
+It seems that our estimate is an over estimate of the number of counties by about 1 thousand over. Just a little over one unit of standard error above.  
+
+## b. 
+
+```{r}
+# Let's see Tom's SRS
+tom_samp <- #sample(1:nrow(states), size = 10, replace = FALSE)
+tom_samp <- samp_clust
+
+
+tom_total <- nrow(states) / 10 * sum(states[tom_samp,]$counties)
+tom_total
+
+se_tom = 51* sqrt((1 - 10/51) * var(states[tom_samp,]$counties) / 10)
+se_tom
+```
+
+Tom's estimated total, 4855, is much father from the population total (3143 counties) and a smaller standard error. Tom's estimator is biased for the population total since we are assuming without replacement in SRS.   
