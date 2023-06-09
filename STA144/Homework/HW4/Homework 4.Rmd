@@ -74,17 +74,93 @@ acc
 ```{r}
 ti_smo <- sum(c(316.8, 89.4, 153.3, 540))
 Mi_smo <- sum(c(792, 447, 511, 800))
-mi_smo <- c(25, 15 ,20 ,40)
+mi_smo <- c(25, 15 , 20 , 40)
 
-ybar_smo <- ti_smo/Mi_smo
+Mbar_smo <- Mi_smo / 4
+
+ybar_smo <- ti_smo / Mi_smo
 ybar_smo
 
-s2i_smo <- 1 / (mi_smo - 1) * sum()
-s2r_smo <- var(c(316.8, 89.4, 153.3, 540) - c(792, 447, 511, 800)*ybar_smo)
-sec_sum <- (1 - mi_smo/ c(792, 447, 511, 800)) * c(792, 447, 511, 800)^2
+#s2i_smo <- 1 / (mi_smo - 1) * sum()
+#s2r_smo <- var(c(316.8, 89.4, 153.3, 540) - c(792, 447, 511, 800)*ybar_smo)
+sec_sum <-
+  (1 - mi_smo / c(792, 447, 511, 800)) * c(792, 447, 511, 800) ^ 2
 
 
-se_smo <- 1 / (Mi_smo/4)^2 * sqrt((1 - 4/29) * s2r_smo/4)
+#se_smo <- 1 / (Mi_smo/4)^2 * sqrt((1 - 4/29) * s2r_smo/4)
+se_smo <-
+  sqrt((1 - 4 / 29) * 1 / (4 * Mbar_smo ^ 2) * sum((
+    c(316.8, 89.4, 153.3, 540) - ybar_smo * c(792, 447, 511, 800)
+  ) ^ 2) / (4 - 1))
+se_smo
+
+# our confidence interval 
+cat("Our confidence interval is ")
+c(ybar_smo - 1.96 * se_smo,  ybar_smo + 1.96 * se_smo)
+```
+
+## b.
+
+```{r}
+# find total unbiased estimation by N/n * ti
+that_smo <- 29 / 4 * ti_smo
+#that_smo
+
+st_smo <-
+  1 / (4 - 1) * sum((c(316.8, 89.4, 153.3, 540) - that_smo / 29) ^ 2)
+#st_smo
+
+se_that_smo <- 29 * sqrt((1 - 4 / 29) * st_smo / 4)
+#se_that_smo
+
+# The 95% CI for the total is the following
+c(that_smo - 1.96 * se_that_smo,  that_smo + 1.96 * se_that_smo)
+```
+## c.
+
+```{r}
+N <- 29 # number of schools in the region
+n <- 4 # number of sampled schools
+Mi <- c(792, 447, 511, 800) # size of sampled schools
+mi <- c(25, 15, 20, 40) # number sampled in each school
+count_smoker <- c(10, 3, 6, 27) # number of female smokers in the schools
+
+sch <-rep(1:n, mi) # vector for school id
+stu <- c(1:25, 1:15, 1:20, 1:40) # vector for female student id in each school
+smokr <- rep(c(1, 0,1,0,1,0,1,0), times = c(10, 15, 3, 12, 6, 14, 27, 13))
+
+smoker_df <- data.frame(sch, stu, smokr) 
+```
+
+```{r}
+# From discussion 10
+
+# Estimate of proportion
+p_hat <- sum(Mi*(count_smoker/mi))/sum(Mi)   #same as above
+# Standard error for proportion:
+M_bar <- mean(Mi)
+si2 <- aggregate(smokr~sch, data=smoker_df, FUN=var)$smokr
+
+MSW <- sum(si2*(mi-1))/(sum(mi) - n)   #estimated MSW
+#MSW
+S2 <- sum((smoker_df$smokr - p_hat)^2)/(sum(mi) - 1)   #estimate S2
+#S2
+Ra2 <- 1 - MSW/S2   #estimated Ra2
+#Ra2
+
+N <- 35   #number of wards at new hospital
+M_bar <- mean(Mi)   #estimate the mean ward size by the wards in our sample
+
+C <- 300 #budget
+c1 <- 50  #cost of psu
+c2 <- 0.5   #cost of ssu
+
+#Guidelines for number of psus and ssus
+m_opt <- sqrt((c1/c2)*((M_bar*(N-1))/(M_bar*N-1))*((1-Ra2)/Ra2))
+cat("The optimized value of m, the number of SSUs, is", ceiling(m_opt), ".\n")
+n_opt <- C/(c1 + c2*m_opt)
+cat("The optimized value of n, the number of PSUs, is", ceiling(n_opt), ".")
+
 ```
 
 # P6 Problem 16, chapter 5, page 212
@@ -129,7 +205,7 @@ wij
 ```{r}
 # From wrong problem
 # ti = sum Mi/mi yij = Mi ybar_i
-ti <- unique(measles$Mitotal) * ynh
+ti <- unique(measles$Mitotal) * ybh
 
 ybh_r <- sum(ti) / sum(unique(measles$Mitotal))
 ybh_r
@@ -140,12 +216,12 @@ Mbar <-  sum(unique(measles$Mitotal)) / length(unique(measles$Mitotal))
 Mbar
 
 # Using formula 5.29
-sr <-
+#sr <-
   #1 / (10 - 1) * (ybh_r * sum(unique(measles$Mitotal)) - ybh * sum(unique(measles$Mitotal)
   #sum())^2)
-sr
-sr
-SE_ybhr <- 1 / Mbar * (1 - 1/Novn) * 
+#sr
+#sr
+#SE_ybhr <- 1 / Mbar * (1 - 1/Novn) * 
 ```
 # P7 Problem 9, Chapter 6, page 269
 
@@ -236,7 +312,7 @@ It seems that our estimate is an over estimate of the number of counties by abou
 
 ```{r}
 # Let's see Tom's SRS
-tom_samp <- #sample(1:nrow(states), size = 10, replace = FALSE)
+#tom_samp <- sample(1:nrow(states), size = 10, replace = FALSE)
 tom_samp <- samp_clust
 
 
@@ -247,4 +323,4 @@ se_tom = 51* sqrt((1 - 10/51) * var(states[tom_samp,]$counties) / 10)
 se_tom
 ```
 
-Tom's estimated total, 4855, is much father from the population total (3143 counties) and a smaller standard error. Tom's estimator is biased for the population total since we are assuming without replacement in SRS.   
+Tom's estimated total, 4855, is much farther from the population total (3143 counties) and a smaller standard error. Tom's estimator is biased for the population total since we are assuming without replacement in SRS.   
