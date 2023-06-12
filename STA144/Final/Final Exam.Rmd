@@ -1,0 +1,37 @@
+---
+title: "Final Exam 144"
+author: "Gianni Spiga"
+date: '2023-06-11'
+output:
+  html_document:
+    df_print: paged
+    theme: flatly
+    code_folding: hide
+    toc: yes
+    toc_float: yes
+---
+
+# Problem 1
+
+## a.
+
+```{r}
+nhanes <- read.csv("nhanes.csv")
+head(nhanes)
+
+nhanes <- nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr", "age", "sdmvstra")]
+
+# change characters to numerics
+library(dplyr)
+nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")] <-
+  nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")] %>% mutate(across(where(is.character), as.numeric))
+which(is.na(nhanes))
+# Remove NAs
+nhanes <-
+  nhanes %>% na.omit()
+
+
+# Means 
+sapply(nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean)
+sapply(nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], sd)
+```
