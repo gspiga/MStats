@@ -11,27 +11,194 @@ output:
     toc_float: yes
 ---
 
+```{r, message = F}
+# libraries
+library(dplyr)
+library(survey)
+```
+
 # Problem 1
 
 ## a.
 
-```{r}
-nhanes <- read.csv("nhanes.csv")
+```{r, warning = F}
+nhanes <- read.csv("nhanes.csv", na = ".")
 head(nhanes)
 
 nhanes <- nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr", "age", "sdmvstra")]
 
 # change characters to numerics
-library(dplyr)
 nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")] <-
   nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")] %>% mutate(across(where(is.character), as.numeric))
-which(is.na(nhanes))
+#which(is.na(nhanes))
 # Remove NAs
 nhanes <-
   nhanes %>% na.omit()
 
 
-# Means 
-sapply(nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean)
+# Means
+N <- nrow(nhanes)
+pop <- data.frame(
+sapply(nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean),
 sapply(nhanes[, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], sd)
+)
+names(pop) <- c("Mean", "SD")
+pop$SD <- pop$SD / sqrt(N)
+pop
 ```
+
+## b.
+
+```{r}
+# We create Stratum based on age
+nhanes$age <- as.numeric(nhanes$age)
+
+# Since ages are decimals, we will round down who ever is below half a year in their current age
+nhanes$age <- cut(nhanes$age, c(0,14.5,35.5,86))# max age in data is 85.08333
+levels(nhanes$age) <- c("0-14", "15-35", "36+")
+```
+
+```{r}
+sum_by_age <-
+  nhanes %>% group_by(age) %>% summarise_at(vars(c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")), list(mean = mean, sd = sd))
+sum_by_age[,c(6:9)] <- sum_by_age[,c(6:9)] / sqrt(N)
+sum_by_age
+```
+
+# Problem 2
+
+## a.
+
+```{r}
+set.seed(1337)
+SRS <- sample(1:N, size = ceiling(0.1*N))
+
+seSRS = function(x){
+  n <- length(x)
+  N <- nrow(nhanes)
+  fpc <- (1 - n/N)
+  se <- sqrt(var(x) / n * fpc)
+  se
+}
+
+SRS_sum <- data.frame(
+sapply(nhanes[SRS, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean),
+sapply(nhanes[SRS, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], seSRS)
+)
+names(SRS_sum) <- c("Mean", "SE")
+SRS_sum
+```
+
+Taking a Simple Random Sample, we can see the Standard Error for our estimates $\bar{y}_S$ are larger than the population standard deviation. 
+
+## b.
+
+```{r}
+# We have a a sample of size 701, lets set up optimal allocation based on weight, with contstant cost (which is just Neyman allocation)
+
+NhSh <-
+  c(sd(nhanes$bmxwt[nhanes$age == "0-14"]), sd(nhanes$bmxwt[nhanes$age == "15-35"]) , sd(nhanes$bmxwt[nhanes$age == "36+"]))
+Neyman_nh <- round((NhSh / sum(NhSh)) * 701)
+cat("Our allocated sample sizes are:", Neyman_nh)
+
+# Now we generate samples for each group with Neyman allocated size
+# Lets first get a count of how many of each age group in population
+Nh <- table(nhanes$age)
+Nh
+
+### To summarize what these three lines are doing:
+### Look at every index for each specified age group
+### Take the solved for allocated n_h sized sample from the row indices
+samp014 <- sample(row.names(nhanes[nhanes$age == "0-14",]), size = Neyman_nh[1])
+samp1535 <- sample(row.names(nhanes[nhanes$age == "15-35",]), size = Neyman_nh[2])
+samp36p <- sample(row.names(nhanes[nhanes$age == "36+",]), size = Neyman_nh[3])
+
+# This retuns the sample with correct allocation
+#(nhanes[c(samp014,samp1535,samp36p),])
+
+# Now we get each corresponding yh
+yh_014 <- sapply(nhanes[samp014, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean)
+yh_1535 <- sapply(nhanes[samp1535, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean)
+yh_36p <- sapply(nhanes[samp36p, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], mean)
+
+yh <- data.frame(yh_014, yh_1535, yh_36p)
+
+# Find our vector ybar_str for all 4 columns
+ybar_str <- rowSums(yh * c(Nh / N))
+# cat("Our ybar_str is\n")
+# ybar_str
+
+# First we get variances S2h for each stratum
+S2h_014 <- sapply(nhanes[samp014, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], var)
+S2h_1535 <- sapply(nhanes[samp1535, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], var)
+S2h_36p <- sapply(nhanes[samp36p, c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")], var)
+
+S2h <- data.frame(S2h_014, S2h_1535, S2h_36p)
+#S2h/ Neyman_nh
+
+
+# find our Standard error
+SE_ybar_str <- sqrt(rowSums((1 - Neyman_nh/Nh) * (Nh/N)^2 * S2h/ Neyman_nh))
+# cat("Our standard error for each ybar_str is\n")
+# SE_ybar_str
+
+strat_sum <- data.frame(ybar_str, SE_ybar_str)
+names(strat_sum) <- c("Stratified Mean", "Stratified SE")
+strat_sum
+```
+
+We can see by using stratified random sampling, we have lowered the standard error for our estimate of the mean, in this case, $\bar{y}_{str}$.
+
+## Problem 3 
+
+```{r}
+# From provided code UnequalProbabilityWOR.R
+cluster_data <- aggregate(cbind(age, bmxwt)~sdmvstra, data=nhanes, FUN=sum)   #This line of code is not designed to work unless you have the nhanes data loaded
+cluster_data$size <- aggregate(bmxwt~sdmvstra, data=nhanes, FUN=length)[,2] 
+cluster_data
+
+# Cluster sampling
+# psi_age <- (Nh/sum(Nh))
+# psi_age
+
+psi <- cluster_data$size / sum(cluster_data$size)
+psi
+
+# Find corresponding pi_ik
+count = 3 # number of clusters
+pi_ik <- matrix(0, nrow=count, ncol=count)
+for(i in 1:(count-1)){    #For loop filling in upper triangle of the matrix
+  for(k in (i+1):count){
+    pi_ik[i,k] = (psi_age[i]*psi_age[k])/(1-psi_age[i]) + (psi_age[k]*psi_age[i])/(1-psi_age[k])
+  }
+}
+pi_ik[lower.tri(pi_ik)] <- t(pi_ik)[lower.tri(pi_ik)]  #pi_ik = pi_ki (matrix is symmetric)
+#pi_ik
+
+#The single inclusion probabilities pi_i (probability that store i is included in the sample can be computed from the pi_ik's)
+pi_i <- rowSums(pi_ik) / 1  #You would typically also divide by (n-1), in this case n-1=1
+
+#Assign the single inclusion probabilities pi_i to be the diagonals of the pi_ik matrix:
+diag(pi_ik) <- pi_i
+#pi_ik
+
+# We now generate a sample for the clusters
+set.seed(1337)
+sample_index <- sample(1:count, size=2, replace=FALSE, prob=psi_age)
+sample_index # We clusters 2 and 3 --> 15-35, 36+
+
+# Gather all the data from the clusters
+nhanes_clu <- nhanes[nhanes$age == "15-35" | nhanes$age == "36+",]
+nhanes_clu
+
+# Find the corresponding ti for our clusters
+nhanes_clu_sum <- nhanes_clu %>% group_by(age) %>% summarise_at(vars(c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")), list(ti = sum))
+
+# We divide each column sub-total (by age) by its corresponding cluster value pi
+tHT <- colSums(nhanes_clu_sum[2:5] / pi_i[2:3]) # we only want the last two values of pi_i since we are looking at clusters 2 and 3
+tHT / sum(wij[2:3])
+
+wij <- 1/pi_i
+sum(wij[2:3])
+```
+
