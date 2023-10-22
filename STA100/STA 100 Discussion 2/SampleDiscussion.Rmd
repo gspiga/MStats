@@ -1,0 +1,18 @@
+---
+title: "Discussion 2"
+author: "Gianni Spiga"
+date: "2023-10-05"
+output: html_document
+---
+
+# R Problems
+
+```{r}
+patients <- read.csv("patients101.csv")
+patients
+
+mean(patients$sysBP)
+
+aggregate(weight ~ gender, data = patients, mean)
+aggregate(height ~ marriage, data = patients, length)
+```

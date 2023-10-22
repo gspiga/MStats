@@ -54,14 +54,16 @@ pop
 nhanes$age <- as.numeric(nhanes$age)
 
 # Since ages are decimals, we will round down who ever is below half a year in their current age
-nhanes$age <- cut(nhanes$age, c(0,14.5,35.5,86))# max age in data is 85.08333
+nhanes$age <- cut(nhanes$age, c(0,14.99, 35.99,86))# max age in data is 85.08333
 levels(nhanes$age) <- c("0-14", "15-35", "36+")
 ```
 
 ```{r}
 sum_by_age <-
   nhanes %>% group_by(age) %>% summarise_at(vars(c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")), list(mean = mean, sd = sd))
-sum_by_age[,c(6:9)] <- sum_by_age[,c(6:9)] / sqrt(N)
+Nh <- table(nhanes$age)
+Nh
+sum_by_age[,c(6:9)] <- sum_by_age[,c(6:9)] / sqrt(Nh)
 sum_by_age
 ```
 
@@ -96,16 +98,16 @@ Taking a Simple Random Sample, we can see the Standard Error for our estimates $
 ```{r}
 # We have a a sample of size 701, lets set up optimal allocation based on weight, with contstant cost (which is just Neyman allocation)
 
-NhSh <-
-  c(sd(nhanes$bmxwt[nhanes$age == "0-14"]), sd(nhanes$bmxwt[nhanes$age == "15-35"]) , sd(nhanes$bmxwt[nhanes$age == "36+"]))
-Neyman_nh <- round((NhSh / sum(NhSh)) * 701)
-cat("Our allocated sample sizes are:", Neyman_nh)
-
-# Now we generate samples for each group with Neyman allocated size
 # Lets first get a count of how many of each age group in population
 Nh <- table(nhanes$age)
 Nh
 
+NhSh <-
+  Nh * c(sd(nhanes$bmxwt[nhanes$age == "0-14"]), sd(nhanes$bmxwt[nhanes$age == "15-35"]) , sd(nhanes$bmxwt[nhanes$age == "36+"]))
+Neyman_nh <- round((NhSh / sum(NhSh)) * 701) #
+cat("Our allocated sample sizes are:", Neyman_nh)
+
+# Now we generate samples for each group with Neyman allocated size
 ### To summarize what these three lines are doing:
 ### Look at every index for each specified age group
 ### Take the solved for allocated n_h sized sample from the row indices
@@ -149,56 +151,201 @@ strat_sum
 
 We can see by using stratified random sampling, we have lowered the standard error for our estimate of the mean, in this case, $\bar{y}_{str}$.
 
-## Problem 3 
+# Problem 3 
 
 ```{r}
+seeds <- c(1337, 144, 808)
+M0 <- nrow(nhanes)
+
 # From provided code UnequalProbabilityWOR.R
-cluster_data <- aggregate(cbind(age, bmxwt)~sdmvstra, data=nhanes, FUN=sum)   #This line of code is not designed to work unless you have the nhanes data loaded
+cluster_data <- aggregate(cbind(age, bmxwt, bmxbmi, bmxwaist, bmxthicr)~sdmvstra, data=nhanes, FUN=sum)   #This line of code is not designed to work unless you have the nhanes data loaded
 cluster_data$size <- aggregate(bmxwt~sdmvstra, data=nhanes, FUN=length)[,2] 
-cluster_data
+#cluster_data
 
 # Cluster sampling
-# psi_age <- (Nh/sum(Nh))
-# psi_age
-
 psi <- cluster_data$size / sum(cluster_data$size)
-psi
+#psi
 
-# Find corresponding pi_ik
-count = 3 # number of clusters
-pi_ik <- matrix(0, nrow=count, ncol=count)
-for(i in 1:(count-1)){    #For loop filling in upper triangle of the matrix
-  for(k in (i+1):count){
-    pi_ik[i,k] = (psi_age[i]*psi_age[k])/(1-psi_age[i]) + (psi_age[k]*psi_age[i])/(1-psi_age[k])
+# We add our psis to the cluster data
+cluster_data$psi <- psi
+
+# N is population clusters, n is clusters sampled
+N = nrow(cluster_data)
+n = 2 # We are sampling two clusters
+
+pi_ik <- matrix(0, nrow=N, ncol=N)
+for(i in 1:(N-1)){    #For loop filling in upper triangle of the matrix
+  for(k in (i+1):N){
+    pi_ik[i,k] = (psi[i]*psi[k])/(1-psi[i]) + (psi[k]*psi[i])/(1-psi[k])
   }
 }
+
 pi_ik[lower.tri(pi_ik)] <- t(pi_ik)[lower.tri(pi_ik)]  #pi_ik = pi_ki (matrix is symmetric)
-#pi_ik
 
 #The single inclusion probabilities pi_i (probability that store i is included in the sample can be computed from the pi_ik's)
 pi_i <- rowSums(pi_ik) / 1  #You would typically also divide by (n-1), in this case n-1=1
 
 #Assign the single inclusion probabilities pi_i to be the diagonals of the pi_ik matrix:
 diag(pi_ik) <- pi_i
-#pi_ik
 
-# We now generate a sample for the clusters
-set.seed(1337)
-sample_index <- sample(1:count, size=2, replace=FALSE, prob=psi_age)
-sample_index # We clusters 2 and 3 --> 15-35, 36+
+cluster_data$pi_i <- pi_i
 
-# Gather all the data from the clusters
-nhanes_clu <- nhanes[nhanes$age == "15-35" | nhanes$age == "36+",]
-nhanes_clu
+data_clust <- data.frame(x1 = numeric(0), x2 = numeric(0), x3 = numeric(0), x4 = numeric(0))
 
-# Find the corresponding ti for our clusters
-nhanes_clu_sum <- nhanes_clu %>% group_by(age) %>% summarise_at(vars(c("bmxwt", "bmxbmi", "bmxwaist", "bmxthicr")), list(ti = sum))
-
-# We divide each column sub-total (by age) by its corresponding cluster value pi
-tHT <- colSums(nhanes_clu_sum[2:5] / pi_i[2:3]) # we only want the last two values of pi_i since we are looking at clusters 2 and 3
-tHT / sum(wij[2:3])
-
-wij <- 1/pi_i
-sum(wij[2:3])
+for (i in seeds){
+  # We now generate a sample for the clusters
+  set.seed(i)
+  sample_index <- sample(1:N, size=2, replace=FALSE, prob=psi)
+  sample_index # We clusters 5 and 9
+  
+  # Gather all the data from the clusters
+  nhanes_clu <- cluster_data[sample_index,]
+  nhanes_clu
+  
+  pi_ik_samp <- pi_ik[sample_index, sample_index]
+  
+  nhanes_design <- svydesign(id=~1, fpc=~pi_i, pps=ppsmat(pi_ik_samp), data=nhanes_clu, variance="YG")
+  
+  
+  #Estimated mean
+  mean_clu <- c(
+  (svytotal(~bmxwt, nhanes_design)/M0)[1],
+  (svytotal(~bmxbmi, nhanes_design)/M0)[1],
+  (svytotal(~bmxwaist, nhanes_design)/M0)[1],
+  (svytotal(~bmxthicr, nhanes_design)/M0)[1]
+  )
+  
+  #Estimated SE
+  se_clu <- c(
+  SE(svytotal(~bmxwt, nhanes_design))/M0,
+  SE(svytotal(~bmxbmi, nhanes_design))/M0,
+  SE(svytotal(~bmxwaist, nhanes_design))/M0,
+  SE(svytotal(~bmxthicr, nhanes_design))/M0
+  )
+  
+  data_clust <- rbind(data_clust, rbind(mean_clu, se_clu))
+}
+data_clust
 ```
 
+# Problem 4
+
+## a. 
+
+```{r}
+# Start with the original nhanes dataset (without missing data removed).
+nhanes1 <- read.csv("nhanes.csv", na = ".")
+
+# Remove just the missing data for BMI. We are only interested in BMI for this problem so missing data elsewhere is fine. You should still have over 8000 observations in the dataset.
+bmi <- nhanes1$bmxbmi %>% na.omit()
+
+# Order by BMI (lowest to highest)
+bmi_sort <- sort(bmi)
+
+# Make 9 clusters, Cluster 1: 1-100, Cluster 2: 1001-1100, ..., Cluster 9: 8001-8100 where these indices are by the ordered BMI. Note that these are not samples from clusters, but the clusters themselves.
+
+clusters9 <- data.frame(
+  clu1 = bmi_sort[1:100],
+  clu2 = bmi_sort[1001:1100],
+  clu3 = bmi_sort[2001:2100],
+  clu4 = bmi_sort[3001:3100],
+  clu5 = bmi_sort[4001:4100],
+  clu6 = bmi_sort[5001:5100],
+  clu7 = bmi_sort[6001:6100],
+  clu8 = bmi_sort[7001:7100],
+  clu9 = bmi_sort[8001:8100]
+)
+head(clusters9)
+# The rest of the data is not needed.
+
+#For each of the 9 clusters, compute the mean BMI and variance (within variation).
+mean_clust9 <- sapply(clusters9, mean)
+mean_clust9
+
+# individual variances
+sapply(clusters9, var)
+
+SSW <-
+  sum((t(clusters9) - mean_clust9)^2) 
+cat("The sum of squares within (SSW) is", SSW, "\n")
+
+#Compute the variance of the cluster means (between variation)
+# Solving for SSB
+SSB <- sum( nrow(clusters9) * (mean_clust9 - mean(mean_clust9)) ^ 2)
+cat("The sum of squares between (SSB) is", SSB, "\n")
+
+# SSTO
+ybar_u <- mean(as.vector(t(clusters9)))
+SSTO <- sum((clusters9 - ybar_u)^2)
+
+
+M <- nrow(clusters9)
+ICC <- 1 - ((M / (M - 1)) * (SSW / SSTO))
+ICC
+
+S2 <- SSTO / (M * ncol(clusters9) - 1)
+S2
+
+MSW <-  SSW / (ncol(clusters9) * (M - 1))
+MSW
+
+R2a <- 1 - MSW / S2
+cat("The adjusted R^2 is ", R2a)
+```
+## b.
+
+```{r}
+set.seed(145)
+bmi_shuf <- sample(bmi)
+
+clusters9_rand <- data.frame(
+  clu1 = bmi_shuf[1:100],
+  clu2 = bmi_shuf[1001:1100],
+  clu3 = bmi_shuf[2001:2100],
+  clu4 = bmi_shuf[3001:3100],
+  clu5 = bmi_shuf[4001:4100],
+  clu6 = bmi_shuf[5001:5100],
+  clu7 = bmi_shuf[6001:6100],
+  clu8 = bmi_shuf[7001:7100],
+  clu9 = bmi_shuf[8001:8100]
+)
+head(clusters9_rand)
+
+#For each of the 9 clusters, compute the mean BMI and variance (within variation).
+mean_clust9 <- sapply(clusters9_rand, mean)
+mean_clust9
+
+# Variance of each cluster
+sapply(clusters9_rand, var)
+
+SSW <-
+  sum((t(clusters9_rand) - mean_clust9)^2) 
+cat("The sum of squares within (SSW) is", SSW, "\n")
+
+#Compute the variance of the cluster means (between variation)
+# Solving for SSB
+SSB <- sum(nrow(clusters9_rand) * (mean_clust9 - mean(mean_clust9)) ^ 2)
+cat("The sum of squares between (SSB) is", SSB, "\n")
+
+# SSTO
+ybar_u <- mean(as.vector(t(clusters9_rand)))
+SSTO <- sum((clusters9_rand - ybar_u)^2)
+
+#M <- nrow(clusters9_rand)
+ICC <- 1 - ((M / (M - 1)) * (SSW / SSTO))
+cat("The ICC is ", ICC ,"\n")
+
+S2 <- SSTO / (M * ncol(clusters9_rand) - 1)
+cat("The total variance is",S2,"\n")
+
+MSW <-  SSW / (ncol(clusters9_rand) * (M - 1))
+cat("The MSW is", MSW, "\n")
+
+R2a <- 1 - MSW / S2
+cat("The adjusted R^2 is", R2a)
+```
+## c.
+
+We can see that when we randomly shuffle the data of our clusters, the variation within our clusters explodes to a much larger value, but our in between variation is super small. However, we are given a very small $R^2_a$ when we randomly shuffle. This random shuffle imitates a SRS since we are introducing random design in the clusters, creating large within variability. In part **a**, our clusters have a systematic design due to the ordering, thus they have very small variation between. 
+
+For instance, in example 5.3 in the Second edition of the textbook, we see Population A has little variation among the psu means, as shown by the negative $ICC$ and $R^2_a$. Similarly, we have the same situation in part **b**, with a very small $ICC$ and $R^2_a$ (although not negative) due to the random shuffle in our clustering. 

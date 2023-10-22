@@ -1,0 +1,63 @@
+---
+title: "Discussion 3 STA 100"
+author: "Gianni Spiga"
+date: "2023-10-12"
+output: html_document
+---
+
+# R Portion 
+
+On Canvas, you will find the file “GSK.csv”. The csv file has the following columns:
+
+Column 1. sysbp: The systolic blood pressure of the subject (mmHg). 
+
+Column 2. gender: The gender, with levels F and M. 
+
+Column 3. married: Y if the subject was married, N if not.
+
+Column 4. exercise: With levels L = low, M = medium, H = high.
+
+Column 5. age: The age of the subject in years.
+
+Column 6. stress: With levels LS = low, MS = medium, HS = high.
+
+Column 7. educatn: With levels LE = low, ME = medium, HE = high.
+
+```{r}
+# Let's load that data in 
+GSK <- read.csv("GSK.csv") # Make sure you put correct path if not in folder
+GSK
+```
+
+## a.) 
+
+```{r}
+hist(GSK$sbp, main = "SBP for All Subjects")
+
+```
+## b.)
+
+```{r}
+boxplot(sbp ~ exercise, data = GSK, main = "SBP by Exercise Level")
+
+```
+
+## c.)
+
+```{r}
+stress.table <- table(GSK$stress)
+stress.table
+
+barplot(stress.table)
+
+```
+
+## d.) 
+```{r}
+SE.table <- table(GSK$exercise, GSK$stress)
+SE.table
+
+mosaicplot(SE.table)
+
+
+```

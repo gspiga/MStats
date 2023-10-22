@@ -1,0 +1,54 @@
+---
+title: "Discussion 2 STA 100"
+author: "Gianni Spiga"
+date: "2023-10-05"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Discussion 2
+
+## R Problem
+
+```{r}
+# Reading in my data, they are in the same folder as my R markdown on my system
+patients101 <- read.csv("patients101.csv")
+head(patients101, 10) # The head function allows me to preview first 10 rows 
+
+# This is a comment, by adding a '#' in code, you can tell R to basically "skip" this line
+# Commenting is very advantageous and a habit I highly recommend forming early, as it will allow you
+# to document all your code, and keep track of what you were doing when you revisit code in the future
+
+# a.)
+# print("hello world")
+
+# Either way here works, I like the '$'
+mean(patients101[, 3])
+mean(patients101$sysBP)
+
+# b.)
+sd(patients101$sysBP)
+
+# c.)
+mean(patients101$weight)
+
+# d. )
+mean(patients101$height)
+
+# e.)
+# The aggregate function allows us to apply a measure of our choosing to subsets of our data, very powerful
+aggregate(weight ~ gender, data = patients101, mean)
+
+# f.)
+aggregate(height ~ gender, data = patients101, sd)
+
+# g.)
+# height "by" marriage,
+aggregate(weight ~ marriage, data = patients101, length)
+
+# h.)
+aggregate(weight ~ marriage, data = patients101, mean)
+```
+
+When making R markdowns, you can combine R code blocks (as shown above) with text to make very clean looking reports and submissions for your assignments. The other advantage is it allows you to neatly knit your code and text into one HTML or PDF file. Try pressing the knit button above to see what this Rmarkdown file looks like when converted to HTML. While it is not required for this course, learning and getting to know R Markdown will be a huge benefit to you. 
