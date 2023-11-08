@@ -1,0 +1,118 @@
+---
+title: "STA 100 Discussion 5"
+author: "Gianni Spiga"
+date: "2023-10-26"
+output: html_document
+---
+
+## R Problems
+
+### 1. Generate data sets of $n$ observations from normally distributed random variables using $n = 10, 100, 1000, 10000$.
+
+Generate data sets of $n$ observations from normally distributed random variables using $n = 10, 100, 1000, 10000$.
+
+```{r}
+# By setting a seed, we are able to make sure Rstudio keeps our results consistent when we randomly generate numbers
+set.seed(123)
+
+# We can take advantage of the rnorm function here
+# Default is mean =0, sd = 1, but you can always edit this to your needs
+n10 = rnorm(10, mean = 0, sd = 1) 
+n100 <- rnorm(100)
+n1000 <- rnorm(1000)
+n10000 <- rnorm(10000)
+```
+
+
+
+### 2. For each of the generated data sets in part (a)
+ - (a) construct a histogram.
+ - (b) create normal probability plots.
+
+```{r}
+# For n = 10
+hist(n10)
+{
+qqnorm(n10)
+qqline(n10)
+}
+
+# For n = 100
+hist(n100)
+{
+qqnorm(n100)
+qqline(n100)
+}
+
+# For n = 1000
+hist(n1000)
+{
+qqnorm(n1000)
+qqline(n1000)
+}
+
+# For n = 10000
+hist(n10000)
+{
+qqnorm(n10000)
+qqline(n10000)
+}
+```
+\\
+
+We can see as our sample size $n$ increases, our distributions become much more normal in appearence! 
+
+### 3. Load the data given in the file **student.csv**. Construct a histogram and a normal probability plot of (a) students’ height and (b) students’ pulse. Would you agree with the statement that the data was generated from a normally distributed random variable? Why or why not?
+
+```{r}
+# Make sure your data is placed in the right folder! 
+student <- read.csv("student.csv")
+
+# Head() function helps us print the first five rows of the data, for preview
+head(student)
+
+# Great way to get a quick understanding of the data
+summary(student)
+```
+
+```{r}
+# (a)
+# Curly brackets help if you get an error trying to run one line at a time 
+{
+qqnorm(student$height, main = "(a) Normal Probability Plot for Student's Height")
+qqline(student$height)
+}
+
+hist(student$height, col = "orange")
+```
+
+
+Most of the points match up along a straight line. It suggests students heights are approximately normally distributed.
+
+```{r}
+# (b)
+{
+qqnorm(student$pulse, main = "(b) Normal Probability Plot for Student's Pulse")
+qqline(student$pulse)
+}
+
+hist(student$pulse, col = "green")
+```
+
+The points forms a (convex) curve instead of a straight line. It indicates a right-skewed distribution. It does not suggest student’s pulses are approximately not normally distributed.
+
+Confused on how to interpret a QQplot? Here is a great Stack Exchange page [here](https://stats.stackexchange.com/questions/101274/how-to-interpret-a-qq-plot). 
+
+## Bonus - Changing your RStudio Theme
+
+You can customize your RStudio color layout with built-in RStudio themes! Here is how to do it. 
+
+- On the top left, click on **Tools**
+
+- Scroll down to **Global Options** 
+
+- On the left, click on the **Appearence** option
+
+- Scroll through the list of **Editor Themes** and click **Apply** once you have chosen one. Once you do, your RStudio will have a new look! If you would like to get into the spirit of Halloween, I recommend the "Merbivore" theme. 
+
+
