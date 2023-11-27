@@ -109,7 +109,7 @@ cLogLogPlot <-
 ggplotly(cLogLogPlot[[1]])
 ```
 
-### Question 3
+## Question 3
 
 ```{r}
 #Building with time independent objects
@@ -147,7 +147,7 @@ summary(burn.cox)
 
 LRT and Wald Test both provide evidence that there is a significant difference with patients with differrent treatments, burn types, and race. 
 
-### Question 4 
+## Question 4 
 
   
 ```{r}
